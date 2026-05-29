@@ -26,27 +26,22 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: var(--bg); color: var(--txt); font-family: var(--sans); font-size: 14px; min-height: 100vh; }
 
-/* ---- TOPBAR ---- */
 .topbar {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 12px 24px;
-    border-bottom: 1px solid var(--border);
-    position: sticky; top: 0;
-    background: var(--bg); z-index: 20;
+    padding: 12px 24px; border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; background: var(--bg); z-index: 20;
 }
 .topbar-left  { display: flex; align-items: center; gap: 12px; }
 .topbar-right { display: flex; align-items: center; gap: 12px; }
 .status-dot {
     width: 8px; height: 8px; border-radius: 50%;
-    background: var(--accent);
-    box-shadow: 0 0 6px var(--accent);
-    flex-shrink: 0;
-    transition: background .4s, box-shadow .4s;
+    background: var(--accent); box-shadow: 0 0 6px var(--accent);
+    flex-shrink: 0; transition: background .4s, box-shadow .4s;
 }
-.status-dot.stale  { background: var(--warn); box-shadow: 0 0 6px var(--warn); }
-.status-dot.offline{ background: var(--txt3); box-shadow: none; }
+.status-dot.stale   { background: var(--warn); box-shadow: 0 0 6px var(--warn); }
+.status-dot.offline { background: var(--txt3); box-shadow: none; }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.35} }
-.status-dot.active { animation: blink 2s infinite; }
+.status-dot.active  { animation: blink 2s infinite; }
 .sys-name { font-family: var(--mono); font-size: 13px; font-weight: 500; letter-spacing: .03em; }
 .sys-sub  { font-family: var(--mono); font-size: 11px; color: var(--txt2); }
 .datetime { font-family: var(--mono); font-size: 11px; color: var(--txt2); text-align: right; line-height: 1.6; }
@@ -55,58 +50,46 @@ body { background: var(--bg); color: var(--txt); font-family: var(--sans); font-
 .autorefresh-wrap input[type=checkbox] { accent-color: var(--accent); cursor: pointer; }
 .btn-refresh {
     display: flex; align-items: center; gap: 6px;
-    font-family: var(--mono); font-size: 11px;
-    padding: 6px 14px;
+    font-family: var(--mono); font-size: 11px; padding: 6px 14px;
     border: 1px solid var(--border2); border-radius: 4px;
-    background: transparent; color: var(--txt2); cursor: pointer;
-    transition: all .15s;
+    background: transparent; color: var(--txt2); cursor: pointer; transition: all .15s;
 }
 .btn-refresh:hover { border-color: var(--accent); color: var(--accent); }
 .btn-refresh svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; }
 
-/* ---- BANNER DE ALARME ---- */
 .alarm-banner {
-    display: none;
-    align-items: center; gap: 10px;
+    display: none; align-items: center; justify-content: space-between;
     padding: 10px 24px;
-    background: rgba(229,62,62,.12);
-    border-bottom: 1px solid rgba(229,62,62,.3);
+    background: rgba(229,62,62,.12); border-bottom: 1px solid rgba(229,62,62,.3);
     font-family: var(--mono); font-size: 12px; color: var(--err);
 }
 .alarm-banner.visible { display: flex; }
-@keyframes pulse-err { 0%,100%{opacity:1} 50%{opacity:.6} }
-.alarm-banner.visible { animation: pulse-err 2s infinite; }
-.alarm-icon { font-size: 14px; }
+.alarm-left { display: flex; align-items: center; gap: 8px; }
+.btn-ack {
+    display: flex; align-items: center; gap: 5px;
+    font-family: var(--mono); font-size: 11px; padding: 5px 14px;
+    border: 1px solid rgba(229,62,62,.4); border-radius: 4px;
+    background: transparent; color: var(--err); cursor: pointer;
+    white-space: nowrap; transition: all .15s;
+}
+.btn-ack:hover { background: rgba(229,62,62,.12); }
+.btn-ack svg { width: 12px; height: 12px; stroke: currentColor; fill: none; stroke-width: 2.5; }
 
-/* ---- MAIN ---- */
 main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 
-/* ---- CARDS ---- */
 .cards { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-bottom: 24px; }
-.card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 16px 18px;
-    transition: border-color .3s;
-}
-.card.card-alarm { border-color: rgba(229,62,62,.5); }
-@keyframes pulse-card { 0%,100%{box-shadow:0 0 0 0 rgba(229,62,62,0)} 50%{box-shadow:0 0 0 3px rgba(229,62,62,.2)} }
-.card.card-alarm { animation: pulse-card 2s infinite; }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 16px 18px; transition: border-color .3s; }
 .card-label { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: var(--txt2); text-transform: uppercase; margin-bottom: 12px; }
 .card-val   { font-family: var(--mono); font-size: 26px; font-weight: 500; line-height: 1; }
 .card-sub   { font-family: var(--mono); font-size: 11px; color: var(--txt2); margin-top: 6px; }
-
-/* Barra de nível */
 .nivel-bar-wrap { margin: 10px 0 6px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
 .nivel-bar { height: 100%; border-radius: 3px; transition: width .6s ease, background .4s; }
-
 .c-ok   { color: var(--accent); }
 .c-warn { color: var(--warn); }
 .c-err  { color: var(--err); }
 .c-off  { color: var(--txt2); }
+.c-blue { color: #60a5fa; }
 
-/* ---- CHART ---- */
 .chart-box { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 20px; margin-bottom: 24px; }
 .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .chart-title { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--txt2); }
@@ -117,19 +100,17 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 .chart-wrap { width: 100%; height: 190px; position: relative; }
 .chart-wrap canvas { width: 100% !important; height: 100% !important; }
 
-/* ---- FILTERS ---- */
 .filters { display: flex; align-items: center; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
 .filter-label { font-family: var(--mono); font-size: 10px; color: var(--txt3); text-transform: uppercase; letter-spacing: .06em; margin-right: 2px; }
 .chip {
-    font-family: var(--mono); font-size: 11px;
-    padding: 4px 12px; border: 1px solid var(--border2); border-radius: 999px;
+    font-family: var(--mono); font-size: 11px; padding: 4px 12px;
+    border: 1px solid var(--border2); border-radius: 999px;
     background: transparent; color: var(--txt2); cursor: pointer; transition: all .12s;
 }
 .chip:hover  { border-color: var(--accent); color: var(--accent); }
 .chip.active { border-color: var(--accent); color: var(--accent); background: rgba(0,200,150,.08); }
 .sep { width: 1px; height: 16px; background: var(--border2); margin: 0 4px; }
 
-/* ---- TABS ---- */
 .tabs { display: flex; border-bottom: 1px solid var(--border); }
 .tab {
     font-family: var(--mono); font-size: 11px; letter-spacing: .05em; text-transform: uppercase;
@@ -139,7 +120,6 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 .tab:hover  { color: var(--txt); }
 .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
-/* ---- TABLE ---- */
 .tbl-box { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-bottom: 16px; }
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
@@ -148,42 +128,42 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 table { width: 100%; border-collapse: collapse; }
 thead th {
     font-family: var(--mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
-    color: var(--txt3); padding: 10px 14px; text-align: left;
+    color: var(--txt3); padding: 10px 12px; text-align: left;
     border-bottom: 1px solid var(--border); background: var(--bg); white-space: nowrap;
 }
 th.num, td.num { text-align: right; }
-th.sortable { cursor: pointer; user-select: none; }
-th.sortable:hover { color: var(--txt2); }
 tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
 tbody tr:last-child { border-bottom: none; }
 tbody tr:hover { background: rgba(255,255,255,.02); }
-td { font-family: var(--mono); font-size: 12px; color: var(--txt); padding: 8px 14px; white-space: nowrap; }
+tbody tr.ack-row { opacity: .45; }
+td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 12px; white-space: nowrap; }
 
 .badge {
-    display: inline-flex; align-items: center; gap: 4px;
+    display: inline-flex; align-items: center; gap: 3px;
     font-family: var(--mono); font-size: 10px;
-    padding: 2px 8px; border-radius: 3px; letter-spacing: .04em;
+    padding: 2px 7px; border-radius: 3px; letter-spacing: .04em;
 }
 .b-ok   { background: rgba(0,200,150,.12);  color: var(--accent); }
 .b-off  { background: rgba(255,255,255,.05); color: var(--txt2); }
 .b-err  { background: rgba(229,62,62,.12);   color: var(--err); }
 .b-warn { background: rgba(245,166,35,.12);  color: var(--warn); }
+.b-blue { background: rgba(96,165,250,.12);  color: #60a5fa; }
+.b-ack  { background: rgba(255,255,255,.05); color: var(--txt3); font-style: italic; }
 
 .tbl-footer {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 10px 14px; border-top: 1px solid var(--border); background: var(--bg);
+    padding: 10px 12px; border-top: 1px solid var(--border); background: var(--bg);
 }
 .tbl-info { font-family: var(--mono); font-size: 10px; color: var(--txt3); letter-spacing: .04em; }
 .btn-csv {
     display: inline-flex; align-items: center; gap: 6px;
-    font-family: var(--mono); font-size: 11px;
-    padding: 6px 14px; border: 1px solid var(--border2); border-radius: 4px;
+    font-family: var(--mono); font-size: 11px; padding: 6px 14px;
+    border: 1px solid var(--border2); border-radius: 4px;
     background: transparent; color: var(--txt2); cursor: pointer; transition: all .15s;
 }
 .btn-csv:hover { border-color: var(--accent); color: var(--accent); }
 .btn-csv svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; }
 
-/* ---- RESPONSIVE ---- */
 @media (max-width: 700px) {
     .cards { grid-template-columns: repeat(2, 1fr); }
     main { padding: 16px; }
@@ -195,7 +175,6 @@ td { font-family: var(--mono); font-size: 12px; color: var(--txt); padding: 8px 
 </head>
 <body>
 
-<!-- TOPBAR -->
 <div class="topbar">
     <div class="topbar-left">
         <div class="status-dot active" id="status-dot"></div>
@@ -217,15 +196,18 @@ td { font-family: var(--mono); font-size: 12px; color: var(--txt); padding: 8px 
     </div>
 </div>
 
-<!-- BANNER DE ALARME -->
 <div class="alarm-banner" id="alarm-banner">
-    <span class="alarm-icon">⚠</span>
-    <span id="alarm-text">Falha detectada no sistema</span>
+    <div class="alarm-left">
+        <svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span id="alarm-text">Falha detectada</span>
+    </div>
+    <button class="btn-ack" onclick="reconhecerErro()">
+        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+        Reconhecer erro
+    </button>
 </div>
 
 <main>
-
-    <!-- CARDS -->
     <div class="cards">
         <div class="card" id="card-nivel-box">
             <div class="card-label">Nível de água</div>
@@ -233,7 +215,7 @@ td { font-family: var(--mono); font-size: 12px; color: var(--txt); padding: 8px 
             <div class="nivel-bar-wrap"><div class="nivel-bar" id="nivel-bar" style="width:0%;background:var(--accent);"></div></div>
             <div class="card-sub" id="card-nivel-cm">— cm</div>
         </div>
-        <div class="card" id="card-bomba-box">
+        <div class="card">
             <div class="card-label">Bomba</div>
             <div class="card-val c-off" id="card-bomba" style="font-size:16px;padding-top:6px;">—</div>
             <div class="card-sub" id="card-bomba-sub">—</div>
@@ -243,29 +225,25 @@ td { font-family: var(--mono); font-size: 12px; color: var(--txt); padding: 8px 
             <div class="card-val" id="card-pzem">—</div>
             <div class="card-sub">PZEM-016</div>
         </div>
-        <div class="card" id="card-erros-box">
-            <div class="card-label">Erros</div>
-            <div class="card-val c-ok" id="card-erros" style="font-size:16px;padding-top:6px;">—</div>
-            <div class="card-sub" id="card-erros-sub">—</div>
+        <div class="card">
+            <div class="card-label">Celular</div>
+            <div class="card-val c-off" id="card-celular" style="font-size:16px;padding-top:6px;">—</div>
+            <div class="card-sub" id="card-celular-sub">—</div>
         </div>
     </div>
 
-    <!-- CHART -->
     <div class="chart-box">
         <div class="chart-header">
             <span class="chart-title">Nível do reservatório</span>
             <div class="legend">
                 <div class="leg"><div class="leg-line" style="background:var(--accent);"></div>Nível (%)</div>
-                <div class="leg"><div class="leg-line" style="background:var(--blue);border-style:dashed;height:0;border-top:2px dashed var(--blue);"></div>Bomba ligada</div>
-                <div class="leg"><div class="leg-dot" style="background:var(--err);"></div>Erro</div>
+                <div class="leg"><div class="leg-line" style="background:var(--blue);"></div>Bomba ligada</div>
+                <div class="leg"><div class="leg-dot" style="background:var(--err);"></div>Erro ativo</div>
             </div>
         </div>
-        <div class="chart-wrap">
-            <canvas id="chart-nivel"></canvas>
-        </div>
+        <div class="chart-wrap"><canvas id="chart-nivel"></canvas></div>
     </div>
 
-    <!-- FILTERS -->
     <div class="filters">
         <span class="filter-label">Período</span>
         <button class="chip" onclick="setPeriodo('hoje',this)">Hoje</button>
@@ -277,29 +255,28 @@ td { font-family: var(--mono); font-size: 12px; color: var(--txt); padding: 8px 
         <button class="chip" onclick="setOrdem('asc',this)">Mais antigo</button>
     </div>
 
-    <!-- TABS -->
     <div class="tabs">
         <div class="tab active" onclick="setTab('telemetria',this)">Telemetria</div>
         <div class="tab" onclick="setTab('sessoes',this)">Sessões da bomba</div>
     </div>
 
     <div class="tbl-box">
-
-        <!-- TELEMETRIA -->
         <div id="panel-telemetria" class="tab-panel active">
             <div class="tbl-scroll">
             <table>
                 <thead><tr>
-                    <th class="sortable num">Data/hora ↓</th>
+                    <th class="num">Data/hora</th>
                     <th class="num">Nível</th>
                     <th>Bomba</th>
                     <th>Erros</th>
+                    <th>Ultrassônico</th>
+                    <th>Ladrão</th>
+                    <th>Celular</th>
                     <th class="num">Potência</th>
-                    <th>Sensor</th>
                     <th class="num">RSSI</th>
                 </tr></thead>
                 <tbody id="tbody-telemetria">
-                    <tr><td colspan="7" style="text-align:center;color:var(--txt2);padding:24px;">Carregando dados...</td></tr>
+                    <tr><td colspan="9" style="text-align:center;color:var(--txt2);padding:24px;">Carregando dados...</td></tr>
                 </tbody>
             </table>
             </div>
@@ -312,12 +289,11 @@ td { font-family: var(--mono); font-size: 12px; color: var(--txt); padding: 8px 
             </div>
         </div>
 
-        <!-- SESSÕES -->
         <div id="panel-sessoes" class="tab-panel">
             <div class="tbl-scroll">
             <table>
                 <thead><tr>
-                    <th class="sortable num">Início</th>
+                    <th class="num">Início</th>
                     <th class="num">Fim</th>
                     <th class="num">Duração</th>
                     <th class="num">Nível ini.</th>
@@ -339,7 +315,6 @@ td { font-family: var(--mono); font-size: 12px; color: var(--txt); padding: 8px 
                 </button>
             </div>
         </div>
-
     </div>
 </main>
 
@@ -352,45 +327,20 @@ const CAIXA_CHEIA_CM = 40;
 const CAIXA_VAZIA_CM = 70;
 const STALE_MS       = 15 * 60 * 1000;
 
-let periodo     = '7d';
-let ordem       = 'desc';
-let tabAtiva    = 'telemetria';
-let dadosTel    = [];
-let dadosSes    = [];
-let chartInst   = null;
+let periodo      = '7d';
+let ordem        = 'desc';
+let tabAtiva     = 'telemetria';
+let dadosTel     = [];
+let dadosSes     = [];
+let chartInst    = null;
 let ultimoPacote = null;
-let autoTimer   = null;
+let autoTimer    = null;
+let errosReconhecidos = new Set(JSON.parse(localStorage.getItem('erros_ack') || '[]'));
 
-// ---- RELÓGIO ----
-function atualizarRelogio() {
-    const d    = new Date();
-    const dias = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
-    const mes  = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-    document.getElementById('datetime-display').innerHTML =
-        `${dias[d.getDay()]}, ${d.getDate()} ${mes[d.getMonth()]} ${d.getFullYear()}<br>` +
-        d.toLocaleTimeString('pt-BR');
+function salvarAck() {
+    try { localStorage.setItem('erros_ack', JSON.stringify([...errosReconhecidos])); } catch(e) {}
 }
 
-// ---- STATUS DOT — stale data ----
-function atualizarStatusDot() {
-    const dot = document.getElementById('status-dot');
-    if (!ultimoPacote) { dot.className = 'status-dot offline'; return; }
-    const delta = Date.now() - new Date(ultimoPacote).getTime();
-    if (delta > STALE_MS)       dot.className = 'status-dot stale';
-    else if (delta > STALE_MS / 2) dot.className = 'status-dot';
-    else                         dot.className = 'status-dot active';
-}
-
-// ---- AUTO-REFRESH ----
-function configurarAutoRefresh() {
-    clearInterval(autoTimer);
-    if (document.getElementById('chk-auto').checked) {
-        autoTimer = setInterval(atualizarDados, 60000);
-    }
-}
-document.getElementById('chk-auto').addEventListener('change', configurarAutoRefresh);
-
-// ---- HELPERS ----
 function nivelPct(cm) {
     if (!cm || cm <= 0) return null;
     if (cm <= CAIXA_CHEIA_CM) return 100;
@@ -401,9 +351,8 @@ function nivelPct(cm) {
 function formatISO(iso) {
     if (!iso) return '—';
     const d = new Date(iso);
-    const pad = n => String(n).padStart(2,'0');
-    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ` +
-           `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    const p = n => String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 }
 
 function formatDuracao(s) {
@@ -420,14 +369,43 @@ function motivoLabel(m) {
     return '<span class="badge b-err">Erro</span>';
 }
 
-function errosLabel(b) {
-    if (!b || b === 0) return '<span class="badge b-ok">OK</span>';
+function errosLabel(b, erroSensor, ladrao) {
     const e = [];
     if (b & 1)  e.push('Timeout');
     if (b & 4)  e.push('Ladrão');
     if (b & 16) e.push('PZEM');
+    if (erroSensor) e.push('Sensor');
+    if (!e.length) return '<span style="color:var(--txt3);">—</span>';
     return e.map(x => `<span class="badge b-err">${x}</span>`).join(' ');
 }
+
+function temErro(r) {
+    return (r.erros_ativos && r.erros_ativos !== 0) || r.erro_sensor || r.ladrao_ativo;
+}
+
+function atualizarRelogio() {
+    const d    = new Date();
+    const dias = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
+    const mes  = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+    document.getElementById('datetime-display').innerHTML =
+        `${dias[d.getDay()]}, ${d.getDate()} ${mes[d.getMonth()]} ${d.getFullYear()}<br>${d.toLocaleTimeString('pt-BR')}`;
+}
+
+function atualizarStatusDot() {
+    const dot = document.getElementById('status-dot');
+    if (!ultimoPacote) { dot.className = 'status-dot offline'; return; }
+    const delta = Date.now() - new Date(ultimoPacote).getTime();
+    if (delta > STALE_MS)           dot.className = 'status-dot stale';
+    else if (delta > STALE_MS / 2)  dot.className = 'status-dot';
+    else                             dot.className = 'status-dot active';
+}
+
+function configurarAutoRefresh() {
+    clearInterval(autoTimer);
+    if (document.getElementById('chk-auto').checked)
+        autoTimer = setInterval(atualizarDados, 60000);
+}
+document.getElementById('chk-auto').addEventListener('change', configurarAutoRefresh);
 
 function calcularIntervalo() {
     const fim = new Date().toISOString();
@@ -435,7 +413,6 @@ function calcularIntervalo() {
     if      (periodo === 'hoje') ini.setHours(0,0,0,0);
     else if (periodo === '7d')   ini.setDate(ini.getDate()-7);
     else if (periodo === '30d')  ini.setDate(ini.getDate()-30);
-    else                         ini.setDate(ini.getDate()-7);
     return { ini: ini.toISOString(), fim };
 }
 
@@ -453,7 +430,58 @@ async function fetchSupabase(tabela, params) {
     return { data, total };
 }
 
-// ---- CARREGAR DADOS ----
+function reconhecerErro() {
+    if (!dadosTel.length) return;
+    const ultimo = ordem === 'desc' ? dadosTel[0] : dadosTel[dadosTel.length-1];
+    if (ultimo && ultimo.id) {
+        errosReconhecidos.add(String(ultimo.id));
+        salvarAck();
+    }
+    document.getElementById('alarm-banner').classList.remove('visible');
+    renderTelemetria();
+}
+
+function atualizarCards(r) {
+    const pct = nivelPct(r.nivel_cm);
+    const elN = document.getElementById('card-nivel');
+    elN.textContent = pct !== null ? pct + '%' : '—';
+    elN.className   = 'card-val ' + (pct === null ? 'c-off' : pct > 50 ? 'c-ok' : pct > 20 ? 'c-warn' : 'c-err');
+    document.getElementById('card-nivel-cm').textContent = r.nivel_cm ? r.nivel_cm.toFixed(1) + ' cm' : '— cm';
+
+    const bar = document.getElementById('nivel-bar');
+    const bp  = pct !== null ? pct : 0;
+    bar.style.width      = bp + '%';
+    bar.style.background = bp > 50 ? 'var(--accent)' : bp > 20 ? 'var(--warn)' : 'var(--err)';
+
+    const elB = document.getElementById('card-bomba');
+    elB.textContent = r.bomba_ligada ? 'LIGADA' : 'DESLIGADA';
+    elB.className   = 'card-val ' + (r.bomba_ligada ? 'c-ok' : 'c-off');
+    document.getElementById('card-bomba-sub').textContent = r.bomba_ligada ? 'Motor em operação' : 'Normal';
+
+    document.getElementById('card-pzem').textContent = r.pzem_w !== null ? r.pzem_w + ' W' : '—';
+
+    const elC = document.getElementById('card-celular');
+    elC.textContent = r.celular_presente ? 'PRESENTE' : 'AUSENTE';
+    elC.className   = 'card-val ' + (r.celular_presente ? 'c-blue' : 'c-off');
+    document.getElementById('card-celular-sub').textContent = r.celular_presente ? 'Celular na rede' : '—';
+
+    const temErr = temErro(r);
+    const isAck  = errosReconhecidos.has(String(r.id));
+    const banner = document.getElementById('alarm-banner');
+    if (temErr && !isAck) {
+        const msgs = [];
+        if (r.erros_ativos & 1)  msgs.push('Timeout de operação');
+        if (r.erros_ativos & 4)  msgs.push('Ladrão ativo');
+        if (r.erros_ativos & 16) msgs.push('Falha PZEM');
+        if (r.erro_sensor)       msgs.push('Sensor ultrassônico offline');
+        if (r.ladrao_ativo)      msgs.push('Ladrão ativo');
+        document.getElementById('alarm-text').textContent = '⚠ FALHA: ' + [...new Set(msgs)].join(' | ');
+        banner.classList.add('visible');
+    } else {
+        banner.classList.remove('visible');
+    }
+}
+
 async function carregarTelemetria() {
     const { ini, fim } = calcularIntervalo();
     const ord = ordem === 'desc' ? 'created_at.desc' : 'created_at.asc';
@@ -466,17 +494,15 @@ async function carregarTelemetria() {
             const ultimo = ordem === 'desc' ? dadosTel[0] : dadosTel[dadosTel.length-1];
             atualizarCards(ultimo);
             ultimoPacote = ultimo.created_at;
-            document.getElementById('last-update-label').textContent =
-                'Último pacote: ' + formatISO(ultimoPacote);
+            document.getElementById('last-update-label').textContent = 'Último pacote: ' + formatISO(ultimoPacote);
         }
         renderGrafico();
         atualizarStatusDot();
         const t = total.split('/')[1] || dadosTel.length;
-        document.getElementById('tbl-info-tel').textContent =
-            `${dadosTel.length} de ${t} registros`;
+        document.getElementById('tbl-info-tel').textContent = `${dadosTel.length} de ${t} registros`;
     } catch(e) {
         document.getElementById('tbody-telemetria').innerHTML =
-            '<tr><td colspan="7" style="text-align:center;color:var(--err);padding:24px;">Erro ao carregar. Verifique a conexão.</td></tr>';
+            '<tr><td colspan="9" style="text-align:center;color:var(--err);padding:24px;">Erro ao carregar. Verifique a conexão.</td></tr>';
     }
 }
 
@@ -489,89 +515,37 @@ async function carregarSessoes() {
         dadosSes = data || [];
         renderSessoes();
         const t = total.split('/')[1] || dadosSes.length;
-        document.getElementById('tbl-info-ses').textContent =
-            `${dadosSes.length} de ${t} sessões`;
+        document.getElementById('tbl-info-ses').textContent = `${dadosSes.length} de ${t} sessões`;
     } catch(e) {
         document.getElementById('tbody-sessoes').innerHTML =
             '<tr><td colspan="8" style="text-align:center;color:var(--err);padding:24px;">Erro ao carregar.</td></tr>';
     }
 }
 
-// ---- CARDS ----
-function atualizarCards(r) {
-    const pct = nivelPct(r.nivel_cm);
-
-    // Card nível
-    const elN = document.getElementById('card-nivel');
-    elN.textContent = pct !== null ? pct + '%' : '—';
-    elN.className   = 'card-val ' + (pct === null ? 'c-off' : pct > 50 ? 'c-ok' : pct > 20 ? 'c-warn' : 'c-err');
-    document.getElementById('card-nivel-cm').textContent =
-        r.nivel_cm ? r.nivel_cm.toFixed(1) + ' cm' : '— cm';
-
-    // Barra de nível
-    const bar     = document.getElementById('nivel-bar');
-    const barPct  = pct !== null ? pct : 0;
-    const barClr  = barPct > 50 ? 'var(--accent)' : barPct > 20 ? 'var(--warn)' : 'var(--err)';
-    bar.style.width      = barPct + '%';
-    bar.style.background = barClr;
-
-    // Card bomba
-    const elB = document.getElementById('card-bomba');
-    elB.textContent = r.bomba_ligada ? 'LIGADA' : 'DESLIGADA';
-    elB.className   = 'card-val ' + (r.bomba_ligada ? 'c-ok' : 'c-off');
-    document.getElementById('card-bomba-sub').textContent =
-        r.bomba_ligada ? 'Motor em operação' : 'Normal';
-
-    // Card potência
-    document.getElementById('card-pzem').textContent =
-        r.pzem_w !== null ? r.pzem_w + ' W' : '—';
-
-    // Card erros
-    const errs = r.erros_ativos || 0;
-    const sensor = r.erro_sensor || false;
-    const temErro = errs !== 0 || sensor;
-    const elE = document.getElementById('card-erros');
-    elE.textContent = temErro ? 'ATIVO' : 'Nenhum';
-    elE.className   = 'card-val ' + (temErro ? 'c-err' : 'c-ok');
-    document.getElementById('card-erros-sub').textContent =
-        temErro ? 'Ver tabela' : 'Sistema OK';
-
-    // Alarme global
-    const banner = document.getElementById('alarm-banner');
-    const erroBox = document.getElementById('card-erros-box');
-    if (temErro) {
-        const msgs = [];
-        if (errs & 1)  msgs.push('Timeout de operação');
-        if (errs & 4)  msgs.push('Sensor ladrão ativo');
-        if (errs & 16) msgs.push('Falha PZEM (Modbus)');
-        if (sensor)    msgs.push('Sensor de nível offline');
-        document.getElementById('alarm-text').textContent = '⚠ FALHA ATIVA: ' + msgs.join(' | ');
-        banner.classList.add('visible');
-        erroBox.classList.add('card-alarm');
-    } else {
-        banner.classList.remove('visible');
-        erroBox.classList.remove('card-alarm');
-    }
-}
-
-// ---- TABELAS ----
 function renderTelemetria() {
     const tbody = document.getElementById('tbody-telemetria');
     if (!dadosTel.length) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--txt2);padding:24px;">Nenhum registro no período.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--txt2);padding:24px;">Nenhum registro no período.</td></tr>';
         return;
     }
     tbody.innerHTML = dadosTel.map(r => {
         const pct    = nivelPct(r.nivel_cm);
         const pctStr = pct !== null ? pct + '%' : '—';
         const cmStr  = r.nivel_cm ? ' / ' + r.nivel_cm.toFixed(1) + ' cm' : '';
-        return `<tr>
+        const isAck  = errosReconhecidos.has(String(r.id));
+        const rowCls = isAck ? 'ack-row' : '';
+        const errLabel = isAck
+            ? '<span class="badge b-ack">Reconhecido</span>'
+            : errosLabel(r.erros_ativos || 0, r.erro_sensor, r.ladrao_ativo);
+        return `<tr class="${rowCls}">
             <td class="num">${formatISO(r.created_at)}</td>
             <td class="num">${pctStr}${cmStr}</td>
             <td>${r.bomba_ligada ? '<span class="badge b-ok">Ligada</span>' : '<span class="badge b-off">Desligada</span>'}</td>
-            <td>${errosLabel(r.erros_ativos)}</td>
-            <td class="num">${r.pzem_w !== null ? r.pzem_w + ' W' : '—'}</td>
+            <td>${errLabel}</td>
             <td>${r.erro_sensor ? '<span class="badge b-err">Falha</span>' : '<span class="badge b-ok">OK</span>'}</td>
+            <td>${r.ladrao_ativo ? '<span class="badge b-warn">Ativo</span>' : '<span style="color:var(--txt3);">—</span>'}</td>
+            <td>${r.celular_presente ? '<span class="badge b-blue">Presente</span>' : '<span style="color:var(--txt3);">—</span>'}</td>
+            <td class="num">${r.pzem_w !== null && r.bomba_ligada ? r.pzem_w + ' W' : '<span style="color:var(--txt3);">—</span>'}</td>
             <td class="num">${r.wifi_rssi ? r.wifi_rssi + ' dBm' : '—'}</td>
         </tr>`;
     }).join('');
@@ -599,32 +573,26 @@ function renderSessoes() {
     }).join('');
 }
 
-// ---- GRÁFICO ----
 function renderGrafico() {
     const canvas = document.getElementById('chart-nivel');
     const ctx    = canvas.getContext('2d');
-
-    // Garante ordem ascendente no gráfico independente da ordem da tabela
     const sorted = [...dadosTel].sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
-
-    const labels  = sorted.map(r => formatISO(r.created_at).slice(5,16));
-    const niveis  = sorted.map(r => nivelPct(r.nivel_cm));
-    const ptRad   = sorted.map(r => r.erros_ativos ? 5 : 0);
-    const ptClr   = sorted.map(r => r.erros_ativos ? '#e53e3e' : '#00c896');
-    const bgBomba = sorted.map(r => r.bomba_ligada ? 'rgba(0,112,243,0.10)' : 'transparent');
+    const labels = sorted.map(r => formatISO(r.created_at).slice(5,16));
+    const niveis = sorted.map(r => nivelPct(r.nivel_cm));
+    const ptRad  = sorted.map(r => (temErro(r) && !errosReconhecidos.has(String(r.id))) ? 5 : 0);
+    const ptClr  = sorted.map(r => (temErro(r) && !errosReconhecidos.has(String(r.id))) ? '#e53e3e' : '#00c896');
 
     if (chartInst) chartInst.destroy();
 
-    // Plugin de fundo para bomba ligada
     const bgPlugin = {
         id: 'bgBomba',
         beforeDraw(chart) {
             const { ctx, chartArea: { top, bottom }, scales: { x } } = chart;
             sorted.forEach((r, i) => {
                 if (!r.bomba_ligada) return;
-                const x0 = i > 0            ? x.getPixelForValue(i-1) : x.getPixelForValue(i);
+                const x0 = i > 0             ? x.getPixelForValue(i-1) : x.getPixelForValue(i);
                 const x1 = i < sorted.length-1 ? x.getPixelForValue(i+1) : x.getPixelForValue(i);
-                ctx.fillStyle = 'rgba(0,112,243,0.08)';
+                ctx.fillStyle = 'rgba(0,112,243,0.07)';
                 ctx.fillRect(x0, top, x1 - x0, bottom - top);
             });
         }
@@ -652,7 +620,6 @@ function renderGrafico() {
             maintainAspectRatio: false,
             plugins: {
                 legend: { display: false },
-                annotation: {},
                 tooltip: {
                     backgroundColor: '#13161d',
                     borderColor: '#1e2230',
@@ -661,9 +628,7 @@ function renderGrafico() {
                     bodyColor: '#e2e8f0',
                     titleFont: { family: 'IBM Plex Mono', size: 10 },
                     bodyFont:  { family: 'IBM Plex Mono', size: 12 },
-                    callbacks: {
-                        label: ctx => ctx.parsed.y !== null ? ctx.parsed.y + '%' : 'sem leitura'
-                    }
+                    callbacks: { label: ctx => ctx.parsed.y !== null ? ctx.parsed.y + '%' : 'sem leitura' }
                 }
             },
             scales: {
@@ -672,17 +637,14 @@ function renderGrafico() {
                     grid:  { color: '#1e2230', lineWidth: 0.5 }
                 },
                 y: {
-                    min: 0, max: 100,
+                    min: 0, max: 105,
                     ticks: { color: '#4a5568', font: { family: 'IBM Plex Mono', size: 9 }, callback: v => v + '%' },
-                    grid:  { color: '#1e2230', lineWidth: 0.5 },
-                    // Linhas de referência: transbordo (100%) e cavitação (10%)
-                    afterDataLimits(axis) { axis.max = 105; }
+                    grid:  { color: '#1e2230', lineWidth: 0.5 }
                 }
             }
         }
     });
 
-    // Linhas de referência manuais via plugin
     Chart.register({
         id: 'thresholds',
         afterDraw(chart) {
@@ -690,19 +652,16 @@ function renderGrafico() {
             const drawLine = (pct, color, label) => {
                 const yPx = y.getPixelForValue(pct);
                 ctx.save();
-                ctx.setLineDash([4, 4]);
+                ctx.setLineDash([4,4]);
                 ctx.strokeStyle = color;
                 ctx.lineWidth   = 1;
-                ctx.globalAlpha = 0.5;
-                ctx.beginPath();
-                ctx.moveTo(left, yPx);
-                ctx.lineTo(right, yPx);
-                ctx.stroke();
+                ctx.globalAlpha = 0.4;
+                ctx.beginPath(); ctx.moveTo(left, yPx); ctx.lineTo(right, yPx); ctx.stroke();
                 ctx.setLineDash([]);
-                ctx.globalAlpha = 0.7;
-                ctx.fillStyle   = color;
-                ctx.font        = '9px IBM Plex Mono';
-                ctx.fillText(label, right - 60, yPx - 3);
+                ctx.globalAlpha = 0.6;
+                ctx.fillStyle = color;
+                ctx.font = '9px IBM Plex Mono';
+                ctx.fillText(label, right - 65, yPx - 3);
                 ctx.restore();
             };
             drawLine(100, '#e53e3e', 'TRANSBORDO');
@@ -711,7 +670,6 @@ function renderGrafico() {
     });
 }
 
-// ---- EXPORTAR CSV ----
 function exportarCSV(tipo) {
     const dados = tipo === 'telemetria' ? dadosTel : dadosSes;
     if (!dados.length) return;
@@ -721,14 +679,11 @@ function exportarCSV(tipo) {
     const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
     const url  = URL.createObjectURL(blob);
     const a    = Object.assign(document.createElement('a'), {
-        href: url,
-        download: `marica_${tipo}_${new Date().toISOString().slice(0,10)}.csv`
+        href: url, download: `marica_${tipo}_${new Date().toISOString().slice(0,10)}.csv`
     });
-    a.click();
-    URL.revokeObjectURL(url);
+    a.click(); URL.revokeObjectURL(url);
 }
 
-// ---- CONTROLES ----
 function setPeriodo(p, el) {
     periodo = p;
     document.querySelectorAll('.filters .chip').forEach(c => {
@@ -755,12 +710,8 @@ function setTab(t, el) {
     document.getElementById('panel-' + t).classList.add('active');
 }
 
-function atualizarDados() {
-    carregarTelemetria();
-    carregarSessoes();
-}
+function atualizarDados() { carregarTelemetria(); carregarSessoes(); }
 
-// ---- INIT ----
 atualizarRelogio();
 setInterval(atualizarRelogio, 1000);
 setInterval(atualizarStatusDot, 30000);

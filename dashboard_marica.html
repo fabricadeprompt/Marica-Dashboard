@@ -335,10 +335,16 @@ let dadosSes     = [];
 let chartInst    = null;
 let ultimoPacote = null;
 let autoTimer    = null;
-let errosReconhecidos = new Set(JSON.parse(localStorage.getItem('erros_ack') || '[]'));
+let erroAckAssinatura = JSON.parse(localStorage.getItem('erro_ack_sig') || 'null');
 
-function salvarAck() {
-    try { localStorage.setItem('erros_ack', JSON.stringify([...errosReconhecidos])); } catch(e) {}
+function salvarAck(sig) {
+    try { localStorage.setItem('erro_ack_sig', JSON.stringify(sig)); } catch(e) {}
+    erroAckAssinatura = sig;
+}
+
+function calcularAssinatura(r) {
+    const bits = r.erros_ativos || 0;
+    return `${bits}|${r.erro_sensor ? 1 : 0}|${r.ladrao_ativo ? 1 : 0}`;
 }
 
 function nivelPct(cm) {
@@ -433,9 +439,8 @@ async function fetchSupabase(tabela, params) {
 function reconhecerErro() {
     if (!dadosTel.length) return;
     const ultimo = ordem === 'desc' ? dadosTel[0] : dadosTel[dadosTel.length-1];
-    if (ultimo && ultimo.id) {
-        errosReconhecidos.add(String(ultimo.id));
-        salvarAck();
+    if (ultimo) {
+        salvarAck(calcularAssinatura(ultimo));
     }
     document.getElementById('alarm-banner').classList.remove('visible');
     renderTelemetria();
@@ -466,7 +471,8 @@ function atualizarCards(r) {
     document.getElementById('card-celular-sub').textContent = r.celular_presente ? 'Celular na rede' : '—';
 
     const temErr = temErro(r);
-    const isAck  = errosReconhecidos.has(String(r.id));
+    const sig    = calcularAssinatura(r);
+    const isAck  = temErr && erroAckAssinatura === sig;
     const banner = document.getElementById('alarm-banner');
     if (temErr && !isAck) {
         const msgs = [];
@@ -532,8 +538,9 @@ function renderTelemetria() {
         const pct    = nivelPct(r.nivel_cm);
         const pctStr = pct !== null ? pct + '%' : '—';
         const cmStr  = r.nivel_cm ? ' / ' + r.nivel_cm.toFixed(1) + ' cm' : '';
-        const isAck    = errosReconhecidos.has(String(r.id));
-        const rowCls   = isAck ? 'ack-row' : '';
+        const sigRow = calcularAssinatura(r);
+        const isAck  = temErro(r) && erroAckAssinatura === sigRow;
+        const rowCls = isAck ? 'ack-row' : '';
         const errLabel = errosLabel(r.erros_ativos || 0, r.erro_sensor, r.ladrao_ativo);
         return `<tr class="${rowCls}">
             <td class="num">${formatISO(r.created_at)}</td>
@@ -577,9 +584,9 @@ function renderGrafico() {
     const sorted = [...dadosTel].sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
     const labels = sorted.map(r => formatISO(r.created_at).slice(5,16));
     const niveis = sorted.map(r => nivelPct(r.nivel_cm));
-    const ptRad  = sorted.map(r => (temErro(r) && !errosReconhecidos.has(String(r.id))) ? 4 : 0);
-    const ptClr  = sorted.map(() => '#e53e3e');
-    const ptBord = sorted.map(() => '#e53e3e');
+    const ptRad  = sorted.map(() => 0);
+    const ptClr  = sorted.map(() => '#00c896');
+    const ptBord = sorted.map(() => '#00c896');
 
     if (chartInst) chartInst.destroy();
 

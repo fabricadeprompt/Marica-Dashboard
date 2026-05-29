@@ -376,7 +376,7 @@ function errosLabel(b, erroSensor, ladrao) {
     if (b & 16) e.push('PZEM');
     if (erroSensor) e.push('Sensor');
     if (!e.length) return '<span style="color:var(--txt3);">—</span>';
-    return e.map(x => `<span class="badge b-err">${x}</span>`).join(' ');
+    return e.map(x => `<span class="badge b-err" style="margin-right:2px;">${x}</span>`).join('');
 }
 
 function temErro(r) {
@@ -532,17 +532,15 @@ function renderTelemetria() {
         const pct    = nivelPct(r.nivel_cm);
         const pctStr = pct !== null ? pct + '%' : '—';
         const cmStr  = r.nivel_cm ? ' / ' + r.nivel_cm.toFixed(1) + ' cm' : '';
-        const isAck  = errosReconhecidos.has(String(r.id));
-        const rowCls = isAck ? 'ack-row' : '';
-        const errLabel = isAck
-            ? '<span class="badge b-ack">Reconhecido</span>'
-            : errosLabel(r.erros_ativos || 0, r.erro_sensor, r.ladrao_ativo);
+        const isAck    = errosReconhecidos.has(String(r.id));
+        const rowCls   = isAck ? 'ack-row' : '';
+        const errLabel = errosLabel(r.erros_ativos || 0, r.erro_sensor, r.ladrao_ativo);
         return `<tr class="${rowCls}">
             <td class="num">${formatISO(r.created_at)}</td>
             <td class="num">${pctStr}${cmStr}</td>
             <td>${r.bomba_ligada ? '<span class="badge b-ok">Ligada</span>' : '<span class="badge b-off">Desligada</span>'}</td>
             <td>${errLabel}</td>
-            <td>${r.erro_sensor ? '<span class="badge b-err">Falha</span>' : '<span class="badge b-ok">OK</span>'}</td>
+            <td>${r.erro_sensor ? '<span class="badge b-err">Falha</span>' : '<span style="color:var(--txt3);">—</span>'}</td>
             <td>${r.ladrao_ativo ? '<span class="badge b-warn">Ativo</span>' : '<span style="color:var(--txt3);">—</span>'}</td>
             <td>${r.celular_presente ? '<span class="badge b-blue">Presente</span>' : '<span style="color:var(--txt3);">—</span>'}</td>
             <td class="num">${r.pzem_w !== null && r.bomba_ligada ? r.pzem_w + ' W' : '<span style="color:var(--txt3);">—</span>'}</td>
@@ -579,8 +577,9 @@ function renderGrafico() {
     const sorted = [...dadosTel].sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
     const labels = sorted.map(r => formatISO(r.created_at).slice(5,16));
     const niveis = sorted.map(r => nivelPct(r.nivel_cm));
-    const ptRad  = sorted.map(r => (temErro(r) && !errosReconhecidos.has(String(r.id))) ? 5 : 0);
-    const ptClr  = sorted.map(r => (temErro(r) && !errosReconhecidos.has(String(r.id))) ? '#e53e3e' : '#00c896');
+    const ptRad  = sorted.map(r => (temErro(r) && !errosReconhecidos.has(String(r.id))) ? 4 : 0);
+    const ptClr  = sorted.map(() => '#e53e3e');
+    const ptBord = sorted.map(() => '#e53e3e');
 
     if (chartInst) chartInst.destroy();
 
@@ -609,7 +608,7 @@ function renderGrafico() {
                 borderWidth: 2,
                 pointRadius: ptRad,
                 pointBackgroundColor: ptClr,
-                pointBorderColor: ptClr,
+                pointBorderColor: ptBord,
                 tension: 0.3,
                 fill: true,
                 backgroundColor: 'rgba(0,200,150,0.04)'

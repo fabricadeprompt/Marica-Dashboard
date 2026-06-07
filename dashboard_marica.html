@@ -91,31 +91,30 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 .c-off  { color: var(--txt2); }
 .c-blue { color: #60a5fa; }
 
+/* ---- badge de condensação ---- */
+.badge-condensacao {
+    display: none;
+    align-items: center; gap: 5px;
+    margin-top: 8px;
+    font-family: var(--mono); font-size: 10px; letter-spacing: .04em;
+    color: #60a5fa;
+    background: rgba(96,165,250,.10);
+    border: 1px solid rgba(96,165,250,.25);
+    border-radius: 3px;
+    padding: 3px 8px;
+    width: fit-content;
+}
+.badge-condensacao.visible { display: flex; }
+.badge-condensacao svg { width: 10px; height: 10px; stroke: currentColor; fill: none; stroke-width: 2; flex-shrink: 0; }
+
 /* ---- bloco elétrico PZEM-004T ---- */
-.pzem-section {
-    margin-bottom: 24px;
-}
-.pzem-header {
-    display: flex; align-items: center; gap: 10px;
-    margin-bottom: 8px;
-}
-.pzem-title {
-    font-family: var(--mono); font-size: 10px; letter-spacing: .1em;
-    text-transform: uppercase; color: var(--txt3);
-}
-.pzem-badge {
-    font-family: var(--mono); font-size: 10px; padding: 2px 8px;
-    border: 1px solid var(--border2); border-radius: 3px; color: var(--txt3);
-}
-.pzem-unavail {
-    font-family: var(--mono); font-size: 11px; color: var(--txt3);
-    padding: 12px 0; font-style: italic;
-}
+.pzem-section { margin-bottom: 24px; }
+.pzem-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.pzem-title { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--txt3); }
+.pzem-badge { font-family: var(--mono); font-size: 10px; padding: 2px 8px; border: 1px solid var(--border2); border-radius: 3px; color: var(--txt3); }
+.pzem-unavail { font-family: var(--mono); font-size: 11px; color: var(--txt3); padding: 12px 0; font-style: italic; }
 .pzem-cards { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px; }
-.pzem-card {
-    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
-    padding: 14px 16px; transition: border-color .3s;
-}
+.pzem-card { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; transition: border-color .3s; }
 .pzem-card.highlight { border-color: var(--border2); }
 .pzem-card-label { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; color: var(--txt2); text-transform: uppercase; margin-bottom: 10px; }
 .pzem-card-val   { font-family: var(--mono); font-size: 22px; font-weight: 500; line-height: 1; color: var(--txt); }
@@ -247,13 +246,18 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
 
 <main>
 
-    <!-- Bloco principal: nível, bomba, celular -->
+    <!-- Bloco principal: nível, bomba, celular, rssi -->
     <div class="cards">
         <div class="card" id="card-nivel-box">
             <div class="card-label">Nível de água</div>
             <div class="card-val c-ok" id="card-nivel">—</div>
             <div class="nivel-bar-wrap"><div class="nivel-bar" id="nivel-bar" style="width:0%;background:var(--accent);"></div></div>
             <div class="card-sub" id="card-nivel-cm">— cm</div>
+            <!-- Badge de condensação: visível quando sensor em eco secundário -->
+            <div class="badge-condensacao" id="badge-condensacao">
+                <svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 1 7 7c0 4-3 7-7 11C9 16 5 13 5 9a7 7 0 0 1 7-7z"/></svg>
+                Condensação no sensor
+            </div>
         </div>
         <div class="card">
             <div class="card-label">Bomba</div>
@@ -410,9 +414,10 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
 const SUPABASE_URL = 'https://dgnjyzyalnrxpvnyahfd.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRnbmp5enlhbG5yeHB2bnlhaGZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk4NTE5OTIsImV4cCI6MjA5NTQyNzk5Mn0.V32UXx_GjWfnnXlWy5e-JZFZY6kRkjPeVoKWIGa8fiQ';
 
-const CAIXA_CHEIA_CM = 40;
-const CAIXA_VAZIA_CM = 70;
-const STALE_MS       = 15 * 60 * 1000;
+const CAIXA_CHEIA_CM       = 40;
+const CAIXA_VAZIA_CM       = 70;
+const CONDENSACAO_LIMIAR   = 60;   // nivel_cm > 60 cm → eco secundário provável
+const STALE_MS             = 15 * 60 * 1000;
 
 let periodo      = '7d';
 let ordem        = 'desc';
@@ -439,6 +444,12 @@ function nivelPct(cm) {
     if (cm <= CAIXA_CHEIA_CM) return 100;
     if (cm >= CAIXA_VAZIA_CM) return 0;
     return Math.round((CAIXA_VAZIA_CM - cm) / (CAIXA_VAZIA_CM - CAIXA_CHEIA_CM) * 100);
+}
+
+// Infere condensação: nivel_cm > CONDENSACAO_LIMIAR indica eco secundário ativo
+// (leitura real ~37 cm → eco secundário ~74 cm — limiar 60 cm está no meio dos dois)
+function emCondensacao(cm) {
+    return cm !== null && cm !== undefined && cm > CONDENSACAO_LIMIAR;
 }
 
 function formatISO(iso) {
@@ -576,13 +587,11 @@ function atualizarBlocoPzem(r) {
 
     document.getElementById('pzem-a').innerHTML =
         r.pzem_a !== null && r.pzem_a !== undefined
-            ? `${r.pzem_a.toFixed(2)}<span class="pzem-card-unit">A</span>`
-            : '—';
+            ? `${r.pzem_a.toFixed(2)}<span class="pzem-card-unit">A</span>` : '—';
 
     document.getElementById('pzem-v').innerHTML =
         r.pzem_v !== null && r.pzem_v !== undefined
-            ? `${r.pzem_v.toFixed(1)}<span class="pzem-card-unit">V</span>`
-            : '—';
+            ? `${r.pzem_v.toFixed(1)}<span class="pzem-card-unit">V</span>` : '—';
 
     const pf = r.pzem_pf !== null && r.pzem_pf !== undefined ? r.pzem_pf : null;
     document.getElementById('pzem-pf').innerHTML =
@@ -591,8 +600,7 @@ function atualizarBlocoPzem(r) {
 
     document.getElementById('pzem-kwh').innerHTML =
         r.pzem_kwh !== null && r.pzem_kwh !== undefined
-            ? `${r.pzem_kwh.toFixed(2)}<span class="pzem-card-unit">kWh</span>`
-            : '—';
+            ? `${r.pzem_kwh.toFixed(2)}<span class="pzem-card-unit">kWh</span>` : '—';
 
     badge.style.display  = 'inline';
     badge.textContent    = 'ao vivo';
@@ -609,6 +617,14 @@ function atualizarCards(r) {
     const bp  = pct !== null ? pct : 0;
     bar.style.width      = bp + '%';
     bar.style.background = bp > 50 ? 'var(--accent)' : bp > 20 ? 'var(--warn)' : 'var(--err)';
+
+    // Badge de condensação: inferido pelo nível reportado > 60 cm
+    const badgeCond = document.getElementById('badge-condensacao');
+    if (emCondensacao(r.nivel_cm)) {
+        badgeCond.classList.add('visible');
+    } else {
+        badgeCond.classList.remove('visible');
+    }
 
     const elB = document.getElementById('card-bomba');
     elB.textContent = r.bomba_ligada ? 'LIGADA' : 'DESLIGADA';
@@ -702,11 +718,11 @@ function renderTelemetria() {
         const rowCls = isAck ? 'ack-row' : '';
         const errLabel = errosLabel(r.erros_ativos || 0, r.erro_sensor, r.ladrao_ativo);
         const ativo    = r.bomba_ligada;
-        const wStr  = ativo && r.pzem_w  !== null && r.pzem_w  !== undefined ? r.pzem_w + ' W'                    : dash;
-        const aStr  = ativo && r.pzem_a  !== null && r.pzem_a  !== undefined ? r.pzem_a.toFixed(2) + ' A'         : dash;
-        const vStr  = ativo && r.pzem_v  !== null && r.pzem_v  !== undefined ? r.pzem_v.toFixed(1) + ' V'         : dash;
-        const pfStr = ativo && r.pzem_pf !== null && r.pzem_pf !== undefined ? r.pzem_pf.toFixed(2)               : dash;
-        const kwhStr= ativo && r.pzem_kwh!== null && r.pzem_kwh!== undefined ? r.pzem_kwh.toFixed(2) + ' kWh'    : dash;
+        const wStr   = ativo && r.pzem_w   !== null && r.pzem_w   !== undefined ? r.pzem_w + ' W'                 : dash;
+        const aStr   = ativo && r.pzem_a   !== null && r.pzem_a   !== undefined ? r.pzem_a.toFixed(2) + ' A'      : dash;
+        const vStr   = ativo && r.pzem_v   !== null && r.pzem_v   !== undefined ? r.pzem_v.toFixed(1) + ' V'      : dash;
+        const pfStr  = ativo && r.pzem_pf  !== null && r.pzem_pf  !== undefined ? r.pzem_pf.toFixed(2)            : dash;
+        const kwhStr = ativo && r.pzem_kwh !== null && r.pzem_kwh !== undefined ? r.pzem_kwh.toFixed(2) + ' kWh'  : dash;
         return `<tr class="${rowCls}">
             <td class="num">${formatISO(r.created_at)}</td>
             <td class="num">${pctStr}${cmStr}</td>
@@ -732,10 +748,10 @@ function renderSessoes() {
         return;
     }
     tbody.innerHTML = dadosSes.map(s => {
-        const vc    = s.variacao_cm !== null ? (s.variacao_cm >= 0 ? '+' : '') + s.variacao_cm.toFixed(1) + ' cm' : '—';
-        const vcl   = s.variacao_cm >= 0 ? 'c-ok' : 'c-err';
-        const wMed  = s.pzem_w_medio      !== null && s.pzem_w_medio      !== undefined ? s.pzem_w_medio + ' W'                      : '—';
-        const kwhS  = s.pzem_kwh_sessao   !== null && s.pzem_kwh_sessao   !== undefined ? s.pzem_kwh_sessao.toFixed(3) + ' kWh'      : '—';
+        const vc   = s.variacao_cm !== null ? (s.variacao_cm >= 0 ? '+' : '') + s.variacao_cm.toFixed(1) + ' cm' : '—';
+        const vcl  = s.variacao_cm >= 0 ? 'c-ok' : 'c-err';
+        const wMed = s.pzem_w_medio    !== null && s.pzem_w_medio    !== undefined ? s.pzem_w_medio + ' W'               : '—';
+        const kwhS = s.pzem_kwh_sessao !== null && s.pzem_kwh_sessao !== undefined ? s.pzem_kwh_sessao.toFixed(3) + ' kWh' : '—';
         return `<tr>
             <td class="num">${formatISO(s.inicio)}</td>
             <td class="num">${formatISO(s.fim)}</td>
@@ -765,8 +781,8 @@ function renderGrafico() {
             const { ctx, chartArea: { top, bottom }, scales: { x } } = chart;
             sorted.forEach((r, i) => {
                 if (!r.bomba_ligada) return;
-                const x0 = i > 0              ? x.getPixelForValue(i-1) : x.getPixelForValue(i);
-                const x1 = i < sorted.length-1 ? x.getPixelForValue(i+1) : x.getPixelForValue(i);
+                const x0 = i > 0               ? x.getPixelForValue(i-1) : x.getPixelForValue(i);
+                const x1 = i < sorted.length-1  ? x.getPixelForValue(i+1) : x.getPixelForValue(i);
                 ctx.fillStyle = 'rgba(0,112,243,0.07)';
                 ctx.fillRect(x0, top, x1 - x0, bottom - top);
             });

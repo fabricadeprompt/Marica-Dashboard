@@ -77,7 +77,8 @@ body { background: var(--bg); color: var(--txt); font-family: var(--sans); font-
 
 main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 
-.cards { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-bottom: 24px; }
+/* ---- bloco principal ---- */
+.cards { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-bottom: 12px; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 16px 18px; transition: border-color .3s; }
 .card-label { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: var(--txt2); text-transform: uppercase; margin-bottom: 12px; }
 .card-val   { font-family: var(--mono); font-size: 26px; font-weight: 500; line-height: 1; }
@@ -90,6 +91,38 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 .c-off  { color: var(--txt2); }
 .c-blue { color: #60a5fa; }
 
+/* ---- bloco elétrico PZEM-004T ---- */
+.pzem-section {
+    margin-bottom: 24px;
+}
+.pzem-header {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 8px;
+}
+.pzem-title {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--txt3);
+}
+.pzem-badge {
+    font-family: var(--mono); font-size: 10px; padding: 2px 8px;
+    border: 1px solid var(--border2); border-radius: 3px; color: var(--txt3);
+}
+.pzem-unavail {
+    font-family: var(--mono); font-size: 11px; color: var(--txt3);
+    padding: 12px 0; font-style: italic;
+}
+.pzem-cards { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px; }
+.pzem-card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 6px;
+    padding: 14px 16px; transition: border-color .3s;
+}
+.pzem-card.highlight { border-color: var(--border2); }
+.pzem-card-label { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; color: var(--txt2); text-transform: uppercase; margin-bottom: 10px; }
+.pzem-card-val   { font-family: var(--mono); font-size: 22px; font-weight: 500; line-height: 1; color: var(--txt); }
+.pzem-card-unit  { font-family: var(--mono); font-size: 12px; color: var(--txt2); margin-left: 2px; }
+.pzem-card-sub   { font-family: var(--mono); font-size: 10px; color: var(--txt3); margin-top: 5px; }
+
+/* ---- gráfico ---- */
 .chart-box { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 20px; margin-bottom: 24px; }
 .chart-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .chart-title { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--txt2); }
@@ -100,6 +133,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 .chart-wrap { width: 100%; height: 190px; position: relative; }
 .chart-wrap canvas { width: 100% !important; height: 100% !important; }
 
+/* ---- filtros e abas ---- */
 .filters { display: flex; align-items: center; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
 .filter-label { font-family: var(--mono); font-size: 10px; color: var(--txt3); text-transform: uppercase; letter-spacing: .06em; margin-right: 2px; }
 .chip {
@@ -120,6 +154,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 .tab:hover  { color: var(--txt); }
 .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
+/* ---- tabelas ---- */
 .tbl-box { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; margin-bottom: 16px; }
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
@@ -148,7 +183,6 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
 .b-err  { background: rgba(229,62,62,.12);   color: var(--err); }
 .b-warn { background: rgba(245,166,35,.12);  color: var(--warn); }
 .b-blue { background: rgba(96,165,250,.12);  color: #60a5fa; }
-.b-ack  { background: rgba(255,255,255,.05); color: var(--txt3); font-style: italic; }
 
 .tbl-footer {
     display: flex; justify-content: space-between; align-items: center;
@@ -164,8 +198,12 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
 .btn-csv:hover { border-color: var(--accent); color: var(--accent); }
 .btn-csv svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; }
 
+@media (max-width: 900px) {
+    .pzem-cards { grid-template-columns: repeat(3, minmax(0,1fr)); }
+}
 @media (max-width: 700px) {
     .cards { grid-template-columns: repeat(2, 1fr); }
+    .pzem-cards { grid-template-columns: repeat(2, minmax(0,1fr)); }
     main { padding: 16px; }
     .legend { display: none; }
     .topbar { padding: 10px 16px; flex-wrap: wrap; gap: 8px; }
@@ -208,6 +246,8 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
 </div>
 
 <main>
+
+    <!-- Bloco principal: nível, bomba, celular -->
     <div class="cards">
         <div class="card" id="card-nivel-box">
             <div class="card-label">Nível de água</div>
@@ -221,17 +261,55 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
             <div class="card-sub" id="card-bomba-sub">—</div>
         </div>
         <div class="card">
-            <div class="card-label">Potência</div>
-            <div class="card-val" id="card-pzem">—</div>
-            <div class="card-sub">PZEM-016</div>
-        </div>
-        <div class="card">
             <div class="card-label">Celular</div>
             <div class="card-val c-off" id="card-celular" style="font-size:16px;padding-top:6px;">—</div>
             <div class="card-sub" id="card-celular-sub">—</div>
         </div>
+        <div class="card">
+            <div class="card-label">Wi-Fi Controle</div>
+            <div class="card-val c-off" id="card-rssi" style="font-size:22px;padding-top:4px;">—</div>
+            <div class="card-sub" id="card-rssi-sub">—</div>
+        </div>
     </div>
 
+    <!-- Bloco elétrico: PZEM-004T -->
+    <div class="pzem-section">
+        <div class="pzem-header">
+            <span class="pzem-title">Elétrico</span>
+            <span class="pzem-badge">PZEM-004T</span>
+            <span class="pzem-badge" id="pzem-status-badge" style="display:none;"></span>
+        </div>
+        <div id="pzem-unavail" class="pzem-unavail">Bomba desligada — dados elétricos indisponíveis.</div>
+        <div class="pzem-cards" id="pzem-cards" style="display:none;">
+            <div class="pzem-card highlight">
+                <div class="pzem-card-label">Potência</div>
+                <div class="pzem-card-val" id="pzem-w">—<span class="pzem-card-unit">W</span></div>
+                <div class="pzem-card-sub" id="pzem-w-sub">—</div>
+            </div>
+            <div class="pzem-card">
+                <div class="pzem-card-label">Corrente</div>
+                <div class="pzem-card-val" id="pzem-a">—<span class="pzem-card-unit">A</span></div>
+                <div class="pzem-card-sub">instantânea</div>
+            </div>
+            <div class="pzem-card">
+                <div class="pzem-card-label">Tensão</div>
+                <div class="pzem-card-val" id="pzem-v">—<span class="pzem-card-unit">V</span></div>
+                <div class="pzem-card-sub">rede 220 V</div>
+            </div>
+            <div class="pzem-card">
+                <div class="pzem-card-label">Fator de potência</div>
+                <div class="pzem-card-val" id="pzem-pf">—</div>
+                <div class="pzem-card-sub" id="pzem-pf-sub">—</div>
+            </div>
+            <div class="pzem-card">
+                <div class="pzem-card-label">Energia acumulada</div>
+                <div class="pzem-card-val" id="pzem-kwh">—<span class="pzem-card-unit">kWh</span></div>
+                <div class="pzem-card-sub">desde instalação</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Gráfico de nível -->
     <div class="chart-box">
         <div class="chart-header">
             <span class="chart-title">Nível do reservatório</span>
@@ -244,6 +322,7 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
         <div class="chart-wrap"><canvas id="chart-nivel"></canvas></div>
     </div>
 
+    <!-- Filtros -->
     <div class="filters">
         <span class="filter-label">Período</span>
         <button class="chip" onclick="setPeriodo('hoje',this)">Hoje</button>
@@ -255,12 +334,14 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
         <button class="chip" onclick="setOrdem('asc',this)">Mais antigo</button>
     </div>
 
+    <!-- Abas -->
     <div class="tabs">
         <div class="tab active" onclick="setTab('telemetria',this)">Telemetria</div>
         <div class="tab" onclick="setTab('sessoes',this)">Sessões da bomba</div>
     </div>
 
     <div class="tbl-box">
+        <!-- Aba telemetria -->
         <div id="panel-telemetria" class="tab-panel active">
             <div class="tbl-scroll">
             <table>
@@ -272,11 +353,15 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
                     <th>Ultrassônico</th>
                     <th>Ladrão</th>
                     <th>Celular</th>
-                    <th class="num">Potência</th>
+                    <th class="num">W</th>
+                    <th class="num">A</th>
+                    <th class="num">V</th>
+                    <th class="num">FP</th>
+                    <th class="num">kWh</th>
                     <th class="num">RSSI</th>
                 </tr></thead>
                 <tbody id="tbody-telemetria">
-                    <tr><td colspan="9" style="text-align:center;color:var(--txt2);padding:24px;">Carregando dados...</td></tr>
+                    <tr><td colspan="13" style="text-align:center;color:var(--txt2);padding:24px;">Carregando dados...</td></tr>
                 </tbody>
             </table>
             </div>
@@ -289,6 +374,7 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
             </div>
         </div>
 
+        <!-- Aba sessões -->
         <div id="panel-sessoes" class="tab-panel">
             <div class="tbl-scroll">
             <table>
@@ -300,10 +386,11 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
                     <th class="num">Nível fim</th>
                     <th class="num">Variação</th>
                     <th>Motivo</th>
-                    <th class="num">P. média</th>
+                    <th class="num">W médio</th>
+                    <th class="num">kWh sessão</th>
                 </tr></thead>
                 <tbody id="tbody-sessoes">
-                    <tr><td colspan="8" style="text-align:center;color:var(--txt2);padding:24px;">Carregando dados...</td></tr>
+                    <tr><td colspan="9" style="text-align:center;color:var(--txt2);padding:24px;">Carregando dados...</td></tr>
                 </tbody>
             </table>
             </div>
@@ -389,6 +476,28 @@ function temErro(r) {
     return (r.erros_ativos && r.erros_ativos !== 0) || r.erro_sensor || r.ladrao_ativo;
 }
 
+function pfLabel(pf) {
+    if (pf === null || pf === undefined) return '—';
+    if (pf >= 0.90) return 'bom';
+    if (pf >= 0.80) return 'regular';
+    return 'baixo';
+}
+
+function pfColor(pf) {
+    if (pf === null || pf === undefined) return '';
+    if (pf >= 0.90) return 'color:var(--accent);';
+    if (pf >= 0.80) return 'color:var(--warn);';
+    return 'color:var(--err);';
+}
+
+function rssiLabel(rssi) {
+    if (!rssi) return '—';
+    if (rssi >= -60) return 'ótimo';
+    if (rssi >= -70) return 'bom';
+    if (rssi >= -80) return 'fraco';
+    return 'muito fraco';
+}
+
 function atualizarRelogio() {
     const d    = new Date();
     const dias = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
@@ -439,11 +548,54 @@ async function fetchSupabase(tabela, params) {
 function reconhecerErro() {
     if (!dadosTel.length) return;
     const ultimo = ordem === 'desc' ? dadosTel[0] : dadosTel[dadosTel.length-1];
-    if (ultimo) {
-        salvarAck(calcularAssinatura(ultimo));
-    }
+    if (ultimo) salvarAck(calcularAssinatura(ultimo));
     document.getElementById('alarm-banner').classList.remove('visible');
     renderTelemetria();
+}
+
+function atualizarBlocoPzem(r) {
+    const cards   = document.getElementById('pzem-cards');
+    const unavail = document.getElementById('pzem-unavail');
+    const badge   = document.getElementById('pzem-status-badge');
+
+    const temDados = r.bomba_ligada && r.pzem_w !== null && r.pzem_w !== undefined;
+
+    if (!temDados) {
+        cards.style.display   = 'none';
+        unavail.style.display = 'block';
+        badge.style.display   = 'none';
+        return;
+    }
+
+    cards.style.display   = 'grid';
+    unavail.style.display = 'none';
+
+    document.getElementById('pzem-w').innerHTML =
+        `${r.pzem_w}<span class="pzem-card-unit">W</span>`;
+    document.getElementById('pzem-w-sub').textContent = 'potência ativa';
+
+    document.getElementById('pzem-a').innerHTML =
+        r.pzem_a !== null && r.pzem_a !== undefined
+            ? `${r.pzem_a.toFixed(2)}<span class="pzem-card-unit">A</span>`
+            : '—';
+
+    document.getElementById('pzem-v').innerHTML =
+        r.pzem_v !== null && r.pzem_v !== undefined
+            ? `${r.pzem_v.toFixed(1)}<span class="pzem-card-unit">V</span>`
+            : '—';
+
+    const pf = r.pzem_pf !== null && r.pzem_pf !== undefined ? r.pzem_pf : null;
+    document.getElementById('pzem-pf').innerHTML =
+        pf !== null ? `<span style="${pfColor(pf)}">${pf.toFixed(2)}</span>` : '—';
+    document.getElementById('pzem-pf-sub').textContent = pfLabel(pf);
+
+    document.getElementById('pzem-kwh').innerHTML =
+        r.pzem_kwh !== null && r.pzem_kwh !== undefined
+            ? `${r.pzem_kwh.toFixed(2)}<span class="pzem-card-unit">kWh</span>`
+            : '—';
+
+    badge.style.display  = 'inline';
+    badge.textContent    = 'ao vivo';
 }
 
 function atualizarCards(r) {
@@ -463,12 +615,18 @@ function atualizarCards(r) {
     elB.className   = 'card-val ' + (r.bomba_ligada ? 'c-ok' : 'c-off');
     document.getElementById('card-bomba-sub').textContent = r.bomba_ligada ? 'Motor em operação' : 'Normal';
 
-    document.getElementById('card-pzem').textContent = r.pzem_w !== null ? r.pzem_w + ' W' : '—';
-
     const elC = document.getElementById('card-celular');
     elC.textContent = r.celular_presente ? 'PRESENTE' : 'AUSENTE';
     elC.className   = 'card-val ' + (r.celular_presente ? 'c-blue' : 'c-off');
     document.getElementById('card-celular-sub').textContent = r.celular_presente ? 'Celular na rede' : '—';
+
+    const rssi = r.wifi_rssi;
+    const elR  = document.getElementById('card-rssi');
+    elR.textContent = rssi ? rssi + ' dBm' : '—';
+    elR.className   = 'card-val ' + (rssi >= -70 ? 'c-ok' : rssi >= -80 ? 'c-warn' : 'c-err');
+    document.getElementById('card-rssi-sub').textContent = rssiLabel(rssi);
+
+    atualizarBlocoPzem(r);
 
     const temErr = temErro(r);
     const sig    = calcularAssinatura(r);
@@ -508,7 +666,7 @@ async function carregarTelemetria() {
         document.getElementById('tbl-info-tel').textContent = `${dadosTel.length} de ${t} registros`;
     } catch(e) {
         document.getElementById('tbody-telemetria').innerHTML =
-            '<tr><td colspan="9" style="text-align:center;color:var(--err);padding:24px;">Erro ao carregar. Verifique a conexão.</td></tr>';
+            '<tr><td colspan="13" style="text-align:center;color:var(--err);padding:24px;">Erro ao carregar. Verifique a conexão.</td></tr>';
     }
 }
 
@@ -524,16 +682,17 @@ async function carregarSessoes() {
         document.getElementById('tbl-info-ses').textContent = `${dadosSes.length} de ${t} sessões`;
     } catch(e) {
         document.getElementById('tbody-sessoes').innerHTML =
-            '<tr><td colspan="8" style="text-align:center;color:var(--err);padding:24px;">Erro ao carregar.</td></tr>';
+            '<tr><td colspan="9" style="text-align:center;color:var(--err);padding:24px;">Erro ao carregar.</td></tr>';
     }
 }
 
 function renderTelemetria() {
     const tbody = document.getElementById('tbody-telemetria');
     if (!dadosTel.length) {
-        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--txt2);padding:24px;">Nenhum registro no período.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--txt2);padding:24px;">Nenhum registro no período.</td></tr>';
         return;
     }
+    const dash = '<span style="color:var(--txt3);">—</span>';
     tbody.innerHTML = dadosTel.map(r => {
         const pct    = nivelPct(r.nivel_cm);
         const pctStr = pct !== null ? pct + '%' : '—';
@@ -542,15 +701,25 @@ function renderTelemetria() {
         const isAck  = temErro(r) && erroAckAssinatura === sigRow;
         const rowCls = isAck ? 'ack-row' : '';
         const errLabel = errosLabel(r.erros_ativos || 0, r.erro_sensor, r.ladrao_ativo);
+        const ativo    = r.bomba_ligada;
+        const wStr  = ativo && r.pzem_w  !== null && r.pzem_w  !== undefined ? r.pzem_w + ' W'                    : dash;
+        const aStr  = ativo && r.pzem_a  !== null && r.pzem_a  !== undefined ? r.pzem_a.toFixed(2) + ' A'         : dash;
+        const vStr  = ativo && r.pzem_v  !== null && r.pzem_v  !== undefined ? r.pzem_v.toFixed(1) + ' V'         : dash;
+        const pfStr = ativo && r.pzem_pf !== null && r.pzem_pf !== undefined ? r.pzem_pf.toFixed(2)               : dash;
+        const kwhStr= ativo && r.pzem_kwh!== null && r.pzem_kwh!== undefined ? r.pzem_kwh.toFixed(2) + ' kWh'    : dash;
         return `<tr class="${rowCls}">
             <td class="num">${formatISO(r.created_at)}</td>
             <td class="num">${pctStr}${cmStr}</td>
-            <td>${r.bomba_ligada ? '<span class="badge b-ok">Ligada</span>' : '<span class="badge b-off">Desligada</span>'}</td>
+            <td>${ativo ? '<span class="badge b-ok">Ligada</span>' : '<span class="badge b-off">Desligada</span>'}</td>
             <td>${errLabel}</td>
-            <td>${r.erro_sensor ? '<span class="badge b-err">Falha</span>' : '<span style="color:var(--txt3);">—</span>'}</td>
-            <td>${r.ladrao_ativo ? '<span class="badge b-warn">Ativo</span>' : '<span style="color:var(--txt3);">—</span>'}</td>
-            <td>${r.celular_presente ? '<span class="badge b-blue">Presente</span>' : '<span style="color:var(--txt3);">—</span>'}</td>
-            <td class="num">${r.pzem_w !== null && r.bomba_ligada ? r.pzem_w + ' W' : '<span style="color:var(--txt3);">—</span>'}</td>
+            <td>${r.erro_sensor ? '<span class="badge b-err">Falha</span>' : dash}</td>
+            <td>${r.ladrao_ativo ? '<span class="badge b-warn">Ativo</span>' : dash}</td>
+            <td>${r.celular_presente ? '<span class="badge b-blue">Presente</span>' : dash}</td>
+            <td class="num">${wStr}</td>
+            <td class="num">${aStr}</td>
+            <td class="num">${vStr}</td>
+            <td class="num">${pfStr}</td>
+            <td class="num">${kwhStr}</td>
             <td class="num">${r.wifi_rssi ? r.wifi_rssi + ' dBm' : '—'}</td>
         </tr>`;
     }).join('');
@@ -559,12 +728,14 @@ function renderTelemetria() {
 function renderSessoes() {
     const tbody = document.getElementById('tbody-sessoes');
     if (!dadosSes.length) {
-        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--txt2);padding:24px;">Nenhuma sessão no período.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--txt2);padding:24px;">Nenhuma sessão no período.</td></tr>';
         return;
     }
     tbody.innerHTML = dadosSes.map(s => {
-        const vc  = s.variacao_cm !== null ? (s.variacao_cm >= 0 ? '+' : '') + s.variacao_cm.toFixed(1) + ' cm' : '—';
-        const vcl = s.variacao_cm >= 0 ? 'c-ok' : 'c-err';
+        const vc    = s.variacao_cm !== null ? (s.variacao_cm >= 0 ? '+' : '') + s.variacao_cm.toFixed(1) + ' cm' : '—';
+        const vcl   = s.variacao_cm >= 0 ? 'c-ok' : 'c-err';
+        const wMed  = s.pzem_w_medio      !== null && s.pzem_w_medio      !== undefined ? s.pzem_w_medio + ' W'                      : '—';
+        const kwhS  = s.pzem_kwh_sessao   !== null && s.pzem_kwh_sessao   !== undefined ? s.pzem_kwh_sessao.toFixed(3) + ' kWh'      : '—';
         return `<tr>
             <td class="num">${formatISO(s.inicio)}</td>
             <td class="num">${formatISO(s.fim)}</td>
@@ -573,7 +744,8 @@ function renderSessoes() {
             <td class="num">${s.nivel_fim_cm    ? s.nivel_fim_cm.toFixed(1)    + ' cm' : '—'}</td>
             <td class="num ${vcl}" style="font-weight:500;">${vc}</td>
             <td>${motivoLabel(s.motivo_desliga)}</td>
-            <td class="num">${s.pzem_w_medio ? s.pzem_w_medio + ' W' : '—'}</td>
+            <td class="num">${wMed}</td>
+            <td class="num">${kwhS}</td>
         </tr>`;
     }).join('');
 }
@@ -584,9 +756,6 @@ function renderGrafico() {
     const sorted = [...dadosTel].sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
     const labels = sorted.map(r => formatISO(r.created_at).slice(5,16));
     const niveis = sorted.map(r => nivelPct(r.nivel_cm));
-    const ptRad  = sorted.map(() => 0);
-    const ptClr  = sorted.map(() => '#00c896');
-    const ptBord = sorted.map(() => '#00c896');
 
     if (chartInst) chartInst.destroy();
 
@@ -596,7 +765,7 @@ function renderGrafico() {
             const { ctx, chartArea: { top, bottom }, scales: { x } } = chart;
             sorted.forEach((r, i) => {
                 if (!r.bomba_ligada) return;
-                const x0 = i > 0             ? x.getPixelForValue(i-1) : x.getPixelForValue(i);
+                const x0 = i > 0              ? x.getPixelForValue(i-1) : x.getPixelForValue(i);
                 const x1 = i < sorted.length-1 ? x.getPixelForValue(i+1) : x.getPixelForValue(i);
                 ctx.fillStyle = 'rgba(0,112,243,0.07)';
                 ctx.fillRect(x0, top, x1 - x0, bottom - top);
@@ -613,9 +782,7 @@ function renderGrafico() {
                 data: niveis,
                 borderColor: '#00c896',
                 borderWidth: 2,
-                pointRadius: ptRad,
-                pointBackgroundColor: ptClr,
-                pointBorderColor: ptBord,
+                pointRadius: 0,
                 tension: 0.3,
                 fill: true,
                 backgroundColor: 'rgba(0,200,150,0.04)'

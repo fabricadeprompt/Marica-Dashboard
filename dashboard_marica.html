@@ -380,12 +380,14 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
 
         <!-- Aba sessões -->
         <div id="panel-sessoes" class="tab-panel">
+            <div id="sessoes-resumo" style="padding:12px 16px;font-family:var(--mono);font-size:13px;color:var(--txt2);border-bottom:1px solid var(--border);">—</div>
             <div class="tbl-scroll">
             <table>
                 <thead><tr>
                     <th class="num">Início</th>
                     <th class="num">Fim</th>
                     <th class="num">Duração</th>
+                    <th>Origem</th>
                     <th class="num">Nível ini.</th>
                     <th class="num">Nível fim</th>
                     <th class="num">Variação</th>
@@ -394,7 +396,7 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
                     <th class="num">kWh sessão</th>
                 </tr></thead>
                 <tbody id="tbody-sessoes">
-                    <tr><td colspan="9" style="text-align:center;color:var(--txt2);padding:24px;">Carregando dados...</td></tr>
+                    <tr><td colspan="10" style="text-align:center;color:var(--txt2);padding:24px;">Carregando dados...</td></tr>
                 </tbody>
             </table>
             </div>
@@ -569,7 +571,7 @@ function atualizarBlocoPzem(r) {
     const unavail = document.getElementById('pzem-unavail');
     const badge   = document.getElementById('pzem-status-badge');
 
-    const temDados = r.bomba_ligada && r.pzem_w !== null && r.pzem_w !== undefined;
+    const temDados = r.pzem_w !== null && r.pzem_w !== undefined;
 
     if (!temDados) {
         cards.style.display   = 'none';
@@ -603,7 +605,7 @@ function atualizarBlocoPzem(r) {
             ? `${r.pzem_kwh.toFixed(2)}<span class="pzem-card-unit">kWh</span>` : '—';
 
     badge.style.display  = 'inline';
-    badge.textContent    = 'ao vivo';
+    badge.textContent    = r.bomba_ligada ? 'ao vivo' : 'standby · a cada 2min';
 }
 
 function atualizarCards(r) {
@@ -688,17 +690,29 @@ async function carregarTelemetria() {
 
 async function carregarSessoes() {
     const { ini, fim } = calcularIntervalo();
-    const ord = ordem === 'desc' ? 'created_at.desc' : 'created_at.asc';
+    const ord = ordem === 'desc' ? 'inicio.desc' : 'inicio.asc';
     try {
-        const { data, total } = await fetchSupabase('sessoes_marica',
-            `created_at=gte.${ini}&created_at=lte.${fim}&order=${ord}&limit=500`);
-        dadosSes = data || [];
+        const [auto, manual] = await Promise.all([
+            fetchSupabase('sessoes_marica', `created_at=gte.${ini}&created_at=lte.${fim}&order=${ord}&limit=500`),
+            fetchSupabase('sessoes_manuais_marica', `inicio=gte.${ini}&inicio=lte.${fim}&order=${ord}&limit=500`)
+        ]);
+        const dAuto   = (auto.data   || []).map(s => ({ ...s, origem: 'auto'   }));
+        const dManual = (manual.data || []).map(s => ({ ...s, origem: 'manual' }));
+        dadosSes = [...dAuto, ...dManual].sort((a,b) => {
+            const da = new Date(a.inicio), db = new Date(b.inicio);
+            return ordem === 'desc' ? db - da : da - db;
+        });
         renderSessoes();
-        const t = total.split('/')[1] || dadosSes.length;
-        document.getElementById('tbl-info-ses').textContent = `${dadosSes.length} de ${t} sessões`;
+        const t = (auto.total.split('/')[1] || dAuto.length);
+        document.getElementById('tbl-info-ses').textContent = `${dadosSes.length} sessões (${dAuto.length} automáticas, ${dManual.length} manuais)`;
+
+        const totalSeg = dadosSes.reduce((soma, s) => soma + (s.duracao_s || 0), 0);
+        const label = periodo === 'hoje' ? 'hoje' : periodo === '7d' ? 'nos últimos 7 dias' : 'nos últimos 30 dias';
+        document.getElementById('sessoes-resumo').textContent =
+            `Bomba ligada ${dadosSes.length}x ${label} (${dAuto.length} automática/semiautomática, ${dManual.length} manual — chave física) — ${formatDuracao(totalSeg)} no total`;
     } catch(e) {
         document.getElementById('tbody-sessoes').innerHTML =
-            '<tr><td colspan="9" style="text-align:center;color:var(--err);padding:24px;">Erro ao carregar.</td></tr>';
+            '<tr><td colspan="10" style="text-align:center;color:var(--err);padding:24px;">Erro ao carregar.</td></tr>';
     }
 }
 
@@ -718,11 +732,11 @@ function renderTelemetria() {
         const rowCls = isAck ? 'ack-row' : '';
         const errLabel = errosLabel(r.erros_ativos || 0, r.erro_sensor, r.ladrao_ativo);
         const ativo    = r.bomba_ligada;
-        const wStr   = ativo && r.pzem_w   !== null && r.pzem_w   !== undefined ? r.pzem_w + ' W'                 : dash;
-        const aStr   = ativo && r.pzem_a   !== null && r.pzem_a   !== undefined ? r.pzem_a.toFixed(2) + ' A'      : dash;
-        const vStr   = ativo && r.pzem_v   !== null && r.pzem_v   !== undefined ? r.pzem_v.toFixed(1) + ' V'      : dash;
-        const pfStr  = ativo && r.pzem_pf  !== null && r.pzem_pf  !== undefined ? r.pzem_pf.toFixed(2)            : dash;
-        const kwhStr = ativo && r.pzem_kwh !== null && r.pzem_kwh !== undefined ? r.pzem_kwh.toFixed(2) + ' kWh'  : dash;
+        const wStr   = r.pzem_w   !== null && r.pzem_w   !== undefined ? r.pzem_w + ' W'                 : dash;
+        const aStr   = r.pzem_a   !== null && r.pzem_a   !== undefined ? r.pzem_a.toFixed(2) + ' A'      : dash;
+        const vStr   = r.pzem_v   !== null && r.pzem_v   !== undefined ? r.pzem_v.toFixed(1) + ' V'      : dash;
+        const pfStr  = r.pzem_pf  !== null && r.pzem_pf  !== undefined ? r.pzem_pf.toFixed(2)            : dash;
+        const kwhStr = r.pzem_kwh !== null && r.pzem_kwh !== undefined ? r.pzem_kwh.toFixed(2) + ' kWh'  : dash;
         return `<tr class="${rowCls}">
             <td class="num">${formatISO(r.created_at)}</td>
             <td class="num">${pctStr}${cmStr}</td>
@@ -744,22 +758,33 @@ function renderTelemetria() {
 function renderSessoes() {
     const tbody = document.getElementById('tbody-sessoes');
     if (!dadosSes.length) {
-        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;color:var(--txt2);padding:24px;">Nenhuma sessão no período.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--txt2);padding:24px;">Nenhuma sessão no período.</td></tr>';
         return;
     }
     tbody.innerHTML = dadosSes.map(s => {
-        const vc   = s.variacao_cm !== null ? (s.variacao_cm >= 0 ? '+' : '') + s.variacao_cm.toFixed(1) + ' cm' : '—';
+        const isManual = s.origem === 'manual';
+        const origemBadge = isManual
+            ? '<span class="badge b-warn">Manual · chave física</span>'
+            : '<span class="badge b-blue">Automático/Semiauto</span>';
+        const vc   = s.variacao_cm !== null && s.variacao_cm !== undefined ? (s.variacao_cm >= 0 ? '+' : '') + s.variacao_cm.toFixed(1) + ' cm' : '—';
         const vcl  = s.variacao_cm >= 0 ? 'c-ok' : 'c-err';
-        const wMed = s.pzem_w_medio    !== null && s.pzem_w_medio    !== undefined ? s.pzem_w_medio + ' W'               : '—';
-        const kwhS = s.pzem_kwh_sessao !== null && s.pzem_kwh_sessao !== undefined ? s.pzem_kwh_sessao.toFixed(3) + ' kWh' : '—';
+        const wMed = s.pzem_w_medio !== null && s.pzem_w_medio !== undefined
+            ? (isManual ? s.pzem_w_medio.toFixed(0) : s.pzem_w_medio) + ' W' : '—';
+        const kwhVal = isManual ? s.pzem_kwh_consumido : s.pzem_kwh_sessao;
+        const kwhS = kwhVal !== null && kwhVal !== undefined ? kwhVal.toFixed(3) + ' kWh' : '—';
+        const nivelIni = s.nivel_inicio_cm ? s.nivel_inicio_cm.toFixed(1) + ' cm' : '—';
+        const nivelFim = s.nivel_fim_cm ? s.nivel_fim_cm.toFixed(1) + ' cm' : '—';
+        const fimStr = s.fim ? formatISO(s.fim) : '<span class="badge b-ok">em andamento</span>';
+        const duracaoStr = s.fim ? formatDuracao(s.duracao_s) : '—';
         return `<tr>
             <td class="num">${formatISO(s.inicio)}</td>
-            <td class="num">${formatISO(s.fim)}</td>
-            <td class="num">${formatDuracao(s.duracao_s)}</td>
-            <td class="num">${s.nivel_inicio_cm ? s.nivel_inicio_cm.toFixed(1) + ' cm' : '—'}</td>
-            <td class="num">${s.nivel_fim_cm    ? s.nivel_fim_cm.toFixed(1)    + ' cm' : '—'}</td>
+            <td class="num">${fimStr}</td>
+            <td class="num">${duracaoStr}</td>
+            <td>${origemBadge}</td>
+            <td class="num">${nivelIni}</td>
+            <td class="num">${nivelFim}</td>
             <td class="num ${vcl}" style="font-weight:500;">${vc}</td>
-            <td>${motivoLabel(s.motivo_desliga)}</td>
+            <td>${isManual ? '—' : motivoLabel(s.motivo_desliga)}</td>
             <td class="num">${wMed}</td>
             <td class="num">${kwhS}</td>
         </tr>`;

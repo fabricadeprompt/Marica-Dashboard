@@ -253,7 +253,7 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
             <div class="card-val c-ok" id="card-nivel">—</div>
             <div class="nivel-bar-wrap"><div class="nivel-bar" id="nivel-bar" style="width:0%;background:var(--accent);"></div></div>
             <div class="card-sub" id="card-nivel-cm">— cm</div>
-            <!-- Badge de condensação: visível quando sensor em eco secundário -->
+            <!-- Badge de condensação: visível quando agua_erro_sensor=true (modo_reflexao sem compensação, marica-097) -->
             <div class="badge-condensacao" id="badge-condensacao">
                 <svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 1 7 7c0 4-3 7-7 11C9 16 5 13 5 9a7 7 0 0 1 7-7z"/></svg>
                 Condensação no sensor
@@ -418,7 +418,6 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 
 const CAIXA_CHEIA_CM       = 40;
 const CAIXA_VAZIA_CM       = 70;
-const CONDENSACAO_LIMIAR   = 60;   // nivel_cm > 60 cm → eco secundário provável
 const STALE_MS             = 15 * 60 * 1000;
 
 let periodo      = '7d';
@@ -428,6 +427,7 @@ let dadosTel     = [];
 let dadosSes     = [];
 let chartInst    = null;
 let ultimoPacote = null;
+let ultimoBombaOffline = false;
 let autoTimer    = null;
 let erroAckAssinatura = JSON.parse(localStorage.getItem('erro_ack_sig') || 'null');
 
@@ -438,7 +438,7 @@ function salvarAck(sig) {
 
 function calcularAssinatura(r) {
     const bits = r.erros_ativos || 0;
-    return `${bits}|${r.erro_sensor ? 1 : 0}|${r.ladrao_ativo ? 1 : 0}`;
+    return `${bits}|${r.erro_sensor ? 1 : 0}|${r.ladrao_ativo ? 1 : 0}|${r.bomba_offline ? 1 : 0}`;
 }
 
 function nivelPct(cm) {
@@ -448,10 +448,23 @@ function nivelPct(cm) {
     return Math.round((CAIXA_VAZIA_CM - cm) / (CAIXA_VAZIA_CM - CAIXA_CHEIA_CM) * 100);
 }
 
-// Infere condensação: nivel_cm > CONDENSACAO_LIMIAR indica eco secundário ativo
-// (leitura real ~37 cm → eco secundário ~74 cm — limiar 60 cm está no meio dos dois)
-function emCondensacao(cm) {
-    return cm !== null && cm !== undefined && cm > CONDENSACAO_LIMIAR;
+// Condensação sem compensação possível: sinalizada pelo próprio firmware
+// via agua_erro_sensor (marica-079, timeout de modo_reflexao). Substitui a
+// heurística anterior baseada em nivel_cm > limiar, que partia de premissa
+// errada (assumia receber a distância bruta não-compensada -- marica-097).
+function emCondensacao(r) {
+    return !!r.erro_sensor;
+}
+
+// Nível e PZEM só são exibidos como dado confiável quando a Bomba está
+// se comunicando (marica-094/098). Com bomba_offline, nivel_cm/pzem_* no
+// registro são o último valor cacheado pela Controle, não o estado atual.
+function nivelDisponivel(r) {
+    return !r.bomba_offline && r.nivel_cm > 0;
+}
+
+function pzemDisponivel(r) {
+    return !r.bomba_offline && r.pzem_w !== null && r.pzem_w !== undefined;
 }
 
 function formatISO(iso) {
@@ -486,7 +499,7 @@ function errosLabel(b, erroSensor, ladrao) {
 }
 
 function temErro(r) {
-    return (r.erros_ativos && r.erros_ativos !== 0) || r.erro_sensor || r.ladrao_ativo;
+    return (r.erros_ativos && r.erros_ativos !== 0) || r.erro_sensor || r.ladrao_ativo || r.bomba_offline;
 }
 
 function pfLabel(pf) {
@@ -519,13 +532,16 @@ function atualizarRelogio() {
         `${dias[d.getDay()]}, ${d.getDate()} ${mes[d.getMonth()]} ${d.getFullYear()}<br>${d.toLocaleTimeString('pt-BR')}`;
 }
 
+// v2: agora também considera bomba_offline (sinal explícito enviado pela Controle,
+// marica-090/098) -- mais confiável que só a idade da última linha do Supabase,
+// já que a Controle grava periodicamente mesmo sem ouvir a Bomba (marica-086/097).
 function atualizarStatusDot() {
     const dot = document.getElementById('status-dot');
     if (!ultimoPacote) { dot.className = 'status-dot offline'; return; }
     const delta = Date.now() - new Date(ultimoPacote).getTime();
-    if (delta > STALE_MS)           dot.className = 'status-dot stale';
-    else if (delta > STALE_MS / 2)  dot.className = 'status-dot';
-    else                             dot.className = 'status-dot active';
+    if (delta > STALE_MS || ultimoBombaOffline)  dot.className = 'status-dot stale';
+    else if (delta > STALE_MS / 2)                dot.className = 'status-dot';
+    else                                           dot.className = 'status-dot active';
 }
 
 function configurarAutoRefresh() {
@@ -571,11 +587,12 @@ function atualizarBlocoPzem(r) {
     const unavail = document.getElementById('pzem-unavail');
     const badge   = document.getElementById('pzem-status-badge');
 
-    const temDados = r.pzem_w !== null && r.pzem_w !== undefined;
-
-    if (!temDados) {
+    if (!pzemDisponivel(r)) {
         cards.style.display   = 'none';
         unavail.style.display = 'block';
+        unavail.textContent   = r.bomba_offline
+            ? 'Sem comunicação com a Caixa Bomba — dados elétricos indisponíveis.'
+            : 'Bomba desligada — dados elétricos indisponíveis.';
         badge.style.display   = 'none';
         return;
     }
@@ -609,20 +626,21 @@ function atualizarBlocoPzem(r) {
 }
 
 function atualizarCards(r) {
-    const pct = nivelPct(r.nivel_cm);
+    const disponivel = nivelDisponivel(r);
+    const pct = disponivel ? nivelPct(r.nivel_cm) : null;
     const elN = document.getElementById('card-nivel');
     elN.textContent = pct !== null ? pct + '%' : '—';
     elN.className   = 'card-val ' + (pct === null ? 'c-off' : pct > 50 ? 'c-ok' : pct > 20 ? 'c-warn' : 'c-err');
-    document.getElementById('card-nivel-cm').textContent = r.nivel_cm ? r.nivel_cm.toFixed(1) + ' cm' : '— cm';
+    document.getElementById('card-nivel-cm').textContent = disponivel && r.nivel_cm ? r.nivel_cm.toFixed(1) + ' cm' : '— cm';
 
     const bar = document.getElementById('nivel-bar');
     const bp  = pct !== null ? pct : 0;
     bar.style.width      = bp + '%';
     bar.style.background = bp > 50 ? 'var(--accent)' : bp > 20 ? 'var(--warn)' : 'var(--err)';
 
-    // Badge de condensação: inferido pelo nível reportado > 60 cm
+    // Badge de condensação: agua_erro_sensor=true (marica-097), só quando há dado confiável
     const badgeCond = document.getElementById('badge-condensacao');
-    if (emCondensacao(r.nivel_cm)) {
+    if (disponivel && emCondensacao(r)) {
         badgeCond.classList.add('visible');
     } else {
         badgeCond.classList.remove('visible');
@@ -631,7 +649,9 @@ function atualizarCards(r) {
     const elB = document.getElementById('card-bomba');
     elB.textContent = r.bomba_ligada ? 'LIGADA' : 'DESLIGADA';
     elB.className   = 'card-val ' + (r.bomba_ligada ? 'c-ok' : 'c-off');
-    document.getElementById('card-bomba-sub').textContent = r.bomba_ligada ? 'Motor em operação' : 'Normal';
+    document.getElementById('card-bomba-sub').textContent = r.bomba_offline
+        ? 'Sem comunicação'
+        : (r.bomba_ligada ? 'Motor em operação' : 'Normal');
 
     const elC = document.getElementById('card-celular');
     elC.textContent = r.celular_presente ? 'PRESENTE' : 'AUSENTE';
@@ -652,6 +672,7 @@ function atualizarCards(r) {
     const banner = document.getElementById('alarm-banner');
     if (temErr && !isAck) {
         const msgs = [];
+        if (r.bomba_offline)     msgs.push('Sem comunicação com a Bomba');
         if (r.erros_ativos & 1)  msgs.push('Timeout de operação');
         if (r.erros_ativos & 4)  msgs.push('Ladrão ativo');
         if (r.erros_ativos & 16) msgs.push('Falha PZEM');
@@ -676,7 +697,10 @@ async function carregarTelemetria() {
             const ultimo = ordem === 'desc' ? dadosTel[0] : dadosTel[dadosTel.length-1];
             atualizarCards(ultimo);
             ultimoPacote = ultimo.created_at;
-            document.getElementById('last-update-label').textContent = 'Último pacote: ' + formatISO(ultimoPacote);
+            ultimoBombaOffline = !!ultimo.bomba_offline;
+            document.getElementById('last-update-label').textContent = ultimoBombaOffline
+                ? 'Último pacote: ' + formatISO(ultimoPacote) + ' · sem comunicação com a Bomba'
+                : 'Último pacote: ' + formatISO(ultimoPacote);
         }
         renderGrafico();
         atualizarStatusDot();
@@ -724,24 +748,26 @@ function renderTelemetria() {
     }
     const dash = '<span style="color:var(--txt3);">—</span>';
     tbody.innerHTML = dadosTel.map(r => {
-        const pct    = nivelPct(r.nivel_cm);
+        const nivelOk = nivelDisponivel(r);
+        const pct    = nivelOk ? nivelPct(r.nivel_cm) : null;
         const pctStr = pct !== null ? pct + '%' : '—';
-        const cmStr  = r.nivel_cm ? ' / ' + r.nivel_cm.toFixed(1) + ' cm' : '';
+        const cmStr  = nivelOk && r.nivel_cm ? ' / ' + r.nivel_cm.toFixed(1) + ' cm' : '';
         const sigRow = calcularAssinatura(r);
         const isAck  = temErro(r) && erroAckAssinatura === sigRow;
         const rowCls = isAck ? 'ack-row' : '';
         const errLabel = errosLabel(r.erros_ativos || 0, r.erro_sensor, r.ladrao_ativo);
         const ativo    = r.bomba_ligada;
-        const wStr   = r.pzem_w   !== null && r.pzem_w   !== undefined ? r.pzem_w + ' W'                 : dash;
-        const aStr   = r.pzem_a   !== null && r.pzem_a   !== undefined ? r.pzem_a.toFixed(2) + ' A'      : dash;
-        const vStr   = r.pzem_v   !== null && r.pzem_v   !== undefined ? r.pzem_v.toFixed(1) + ' V'      : dash;
-        const pfStr  = r.pzem_pf  !== null && r.pzem_pf  !== undefined ? r.pzem_pf.toFixed(2)            : dash;
-        const kwhStr = r.pzem_kwh !== null && r.pzem_kwh !== undefined ? r.pzem_kwh.toFixed(2) + ' kWh'  : dash;
+        const pzemOk = pzemDisponivel(r);
+        const wStr   = pzemOk && r.pzem_w   !== null && r.pzem_w   !== undefined ? r.pzem_w + ' W'                 : dash;
+        const aStr   = pzemOk && r.pzem_a   !== null && r.pzem_a   !== undefined ? r.pzem_a.toFixed(2) + ' A'      : dash;
+        const vStr   = pzemOk && r.pzem_v   !== null && r.pzem_v   !== undefined ? r.pzem_v.toFixed(1) + ' V'      : dash;
+        const pfStr  = pzemOk && r.pzem_pf  !== null && r.pzem_pf  !== undefined ? r.pzem_pf.toFixed(2)            : dash;
+        const kwhStr = pzemOk && r.pzem_kwh !== null && r.pzem_kwh !== undefined ? r.pzem_kwh.toFixed(2) + ' kWh'  : dash;
         return `<tr class="${rowCls}">
             <td class="num">${formatISO(r.created_at)}</td>
             <td class="num">${pctStr}${cmStr}</td>
             <td>${ativo ? '<span class="badge b-ok">Ligada</span>' : '<span class="badge b-off">Desligada</span>'}</td>
-            <td>${errLabel}</td>
+            <td>${r.bomba_offline ? '<span class="badge b-warn">Sem comunicação</span>' : errLabel}</td>
             <td>${r.erro_sensor ? '<span class="badge b-err">Falha</span>' : dash}</td>
             <td>${r.ladrao_ativo ? '<span class="badge b-warn">Ativo</span>' : dash}</td>
             <td>${r.celular_presente ? '<span class="badge b-blue">Presente</span>' : dash}</td>
@@ -796,7 +822,7 @@ function renderGrafico() {
     const ctx    = canvas.getContext('2d');
     const sorted = [...dadosTel].sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
     const labels = sorted.map(r => formatISO(r.created_at).slice(5,16));
-    const niveis = sorted.map(r => nivelPct(r.nivel_cm));
+    const niveis = sorted.map(r => nivelDisponivel(r) ? nivelPct(r.nivel_cm) : null);
 
     if (chartInst) chartInst.destroy();
 

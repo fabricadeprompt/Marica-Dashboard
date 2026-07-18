@@ -336,6 +336,10 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
         <span class="filter-label">Ordem</span>
         <button class="chip active" onclick="setOrdem('desc',this)">Mais novo</button>
         <button class="chip" onclick="setOrdem('asc',this)">Mais antigo</button>
+        <div class="sep"></div>
+        <span class="filter-label">Dados</span>
+        <button class="chip active" onclick="setFiltroRssi(true,this)">Ao vivo</button>
+        <button class="chip" onclick="setFiltroRssi(false,this)">Todos (inclui buffer)</button>
     </div>
 
     <!-- Abas -->
@@ -422,6 +426,11 @@ const STALE_MS             = 15 * 60 * 1000;
 
 let periodo      = '7d';
 let ordem        = 'desc';
+let filtroAoVivo = true;  // true = só linhas com wifi_rssi (envio ao vivo); esconde
+                           // o buffer de resiliência de Wi-Fi (registrar_telemetria/
+                           // descarregar_buffer), que nunca carrega RSSI por natureza.
+                           // Nada é apagado no Supabase -- só oculto por padrão; o
+                           // botão "Todos" e o CSV continuam dando acesso completo.
 let tabAtiva     = 'telemetria';
 let dadosTel     = [];
 let dadosSes     = [];
@@ -688,9 +697,10 @@ function atualizarCards(r) {
 async function carregarTelemetria() {
     const { ini, fim } = calcularIntervalo();
     const ord = ordem === 'desc' ? 'created_at.desc' : 'created_at.asc';
+    const filtroExtra = filtroAoVivo ? '&wifi_rssi=not.is.null' : '';
     try {
         const { data, total } = await fetchSupabase('telemetria_marica',
-            `created_at=gte.${ini}&created_at=lte.${fim}&order=${ord}&limit=1000`);
+            `created_at=gte.${ini}&created_at=lte.${fim}${filtroExtra}&order=${ord}&limit=1000`);
         dadosTel = data || [];
         renderTelemetria();
         if (dadosTel.length > 0) {
@@ -705,7 +715,9 @@ async function carregarTelemetria() {
         renderGrafico();
         atualizarStatusDot();
         const t = total.split('/')[1] || dadosTel.length;
-        document.getElementById('tbl-info-tel').textContent = `${dadosTel.length} de ${t} registros`;
+        document.getElementById('tbl-info-tel').textContent = filtroAoVivo
+            ? `${dadosTel.length} de ${t} registros · buffer de resiliência oculto`
+            : `${dadosTel.length} de ${t} registros`;
     } catch(e) {
         document.getElementById('tbody-telemetria').innerHTML =
             '<tr><td colspan="13" style="text-align:center;color:var(--err);padding:24px;">Erro ao carregar. Verifique a conexão.</td></tr>';
@@ -937,6 +949,15 @@ function setOrdem(o, el) {
     ordem = o;
     document.querySelectorAll('.filters .chip').forEach(c => {
         if (['Mais novo','Mais antigo'].includes(c.textContent)) c.classList.remove('active');
+    });
+    el.classList.add('active');
+    atualizarDados();
+}
+
+function setFiltroRssi(aoVivo, el) {
+    filtroAoVivo = aoVivo;
+    document.querySelectorAll('.filters .chip').forEach(c => {
+        if (['Ao vivo','Todos (inclui buffer)'].includes(c.textContent)) c.classList.remove('active');
     });
     el.classList.add('active');
     atualizarDados();

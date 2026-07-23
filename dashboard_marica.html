@@ -447,7 +447,7 @@ function salvarAck(sig) {
 
 function calcularAssinatura(r) {
     const bits = r.erros_ativos || 0;
-    return `${bits}|${r.erro_sensor ? 1 : 0}|${r.ladrao_ativo ? 1 : 0}|${r.bomba_offline ? 1 : 0}`;
+    return `${bits}|${r.erro_sensor ? 1 : 0}|${r.ladrao_ativo ? 1 : 0}|${r.bomba_offline ? 1 : 0}|${r.agua_offline ? 1 : 0}`;
 }
 
 function nivelPct(cm) {
@@ -461,15 +461,21 @@ function nivelPct(cm) {
 // via agua_erro_sensor (marica-079, timeout de modo_reflexao). Substitui a
 // heurística anterior baseada em nivel_cm > limiar, que partia de premissa
 // errada (assumia receber a distância bruta não-compensada -- marica-097).
+// agua_offline tem prioridade sobre erro_sensor: durante silêncio de rádio
+// Água→Bomba, erro_sensor pode estar "congelado" no último valor real
+// conhecido (main_bomba.cpp/verificar_silencio_agua(), marica-125) -- não é
+// mais um sinal atual, então não deve acionar o badge de condensação.
 function emCondensacao(r) {
-    return !!r.erro_sensor;
+    return !r.agua_offline && !!r.erro_sensor;
 }
 
 // Nível e PZEM só são exibidos como dado confiável quando a Bomba está
 // se comunicando (marica-094/098). Com bomba_offline, nivel_cm/pzem_* no
 // registro são o último valor cacheado pela Controle, não o estado atual.
+// agua_offline também invalida o nível: nivel_atual_cm fica congelado no
+// último valor real recebido antes do silêncio Água→Bomba (marica-125).
 function nivelDisponivel(r) {
-    return !r.bomba_offline && r.nivel_cm > 0;
+    return !r.bomba_offline && !r.agua_offline && r.nivel_cm > 0;
 }
 
 function pzemDisponivel(r) {
@@ -508,7 +514,7 @@ function errosLabel(b, erroSensor, ladrao) {
 }
 
 function temErro(r) {
-    return (r.erros_ativos && r.erros_ativos !== 0) || r.erro_sensor || r.ladrao_ativo || r.bomba_offline;
+    return (r.erros_ativos && r.erros_ativos !== 0) || r.erro_sensor || r.ladrao_ativo || r.bomba_offline || r.agua_offline;
 }
 
 function pfLabel(pf) {
@@ -685,7 +691,8 @@ function atualizarCards(r) {
         if (r.erros_ativos & 1)  msgs.push('Timeout de operação');
         if (r.erros_ativos & 4)  msgs.push('Ladrão ativo');
         if (r.erros_ativos & 16) msgs.push('Falha PZEM');
-        if (r.erro_sensor)       msgs.push('Sensor ultrassônico offline');
+        if (r.agua_offline)      msgs.push('Sem comunicação com a Água');
+        if (r.erro_sensor && !r.agua_offline) msgs.push('Umidade detectada no sensor ultrassônico');
         if (r.ladrao_ativo)      msgs.push('Ladrão ativo');
         document.getElementById('alarm-text').textContent = '⚠ FALHA: ' + [...new Set(msgs)].join(' | ');
         banner.classList.add('visible');
@@ -780,7 +787,7 @@ function renderTelemetria() {
             <td class="num">${pctStr}${cmStr}</td>
             <td>${ativo ? '<span class="badge b-ok">Ligada</span>' : '<span class="badge b-off">Desligada</span>'}</td>
             <td>${r.bomba_offline ? '<span class="badge b-warn">Sem comunicação</span>' : errLabel}</td>
-            <td>${r.erro_sensor ? '<span class="badge b-err">Falha</span>' : dash}</td>
+            <td>${r.agua_offline ? '<span class="badge b-warn">Sem comunicação</span>' : r.erro_sensor ? '<span class="badge b-err">Umidade detectada</span>' : dash}</td>
             <td>${r.ladrao_ativo ? '<span class="badge b-warn">Ativo</span>' : dash}</td>
             <td>${r.celular_presente ? '<span class="badge b-blue">Presente</span>' : dash}</td>
             <td class="num">${wStr}</td>

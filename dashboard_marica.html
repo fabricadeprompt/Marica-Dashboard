@@ -497,6 +497,27 @@ function estadoBombaAtivos(bitmask) {
     return ESTADO_BOMBA_BITS.filter(e => bitmask & e.bit);
 }
 
+// bomba_motivo_desligamento (MotivoDesligamentoBomba) -- causa do último
+// desligar_bomba(). 2026-07-25. nivel_cheio é o desligamento normal esperado
+// (não é badge de erro); os demais são badges informativos/warn/err conforme
+// a gravidade -- nenhum deles sobe pro alarme sozinho (isso já é feito por
+// r.erros_ativos/r.ladrao_ativo/etc, que refletem o estado ATUAL, não histórico).
+const MOTIVO_DESLIGA = {
+    0: { label: 'Manual',                cls: 'b-off'  },
+    1: { label: 'Nível cheio',           cls: 'b-ok'   },
+    2: { label: 'Segurança excedida',    cls: 'b-err'  },
+    3: { label: 'Nível zero (2min)',     cls: 'b-err'  },
+    4: { label: 'Silêncio da Água',      cls: 'b-warn' },
+    5: { label: 'Timeout de operação',   cls: 'b-err'  },
+    6: { label: 'Ladrão (transbordo)',   cls: 'b-err'  },
+    7: { label: 'Erro físico',           cls: 'b-err'  },
+    8: { label: 'OTA',                   cls: 'b-off'  },
+};
+
+function motivoDesligaInfo(m) {
+    return MOTIVO_DESLIGA[m] ?? MOTIVO_DESLIGA[0];
+}
+
 function salvarAck(sig) {
     try { localStorage.setItem('erro_ack_sig', JSON.stringify(sig)); } catch(e) {}
     erroAckAssinatura = sig;
@@ -734,7 +755,8 @@ function atualizarCards(r) {
     document.getElementById('card-bomba-sub').textContent = r.bomba_offline
         ? 'Sem comunicação'
         : (r.bomba_ligada ? 'Motor em operação'
-            : (estadosBomba.length ? estadosBomba.map(e => e.label).join(' · ') : 'Normal'));
+            : (estadosBomba.length ? estadosBomba.map(e => e.label).join(' · ')
+                : 'Último desligamento: ' + motivoDesligaInfo(r.bomba_motivo_desligamento).label));
 
     const elC = document.getElementById('card-celular');
     elC.textContent = r.celular_presente ? 'PRESENTE' : 'AUSENTE';
@@ -868,6 +890,11 @@ function renderTelemetria() {
         const estadoBadges = estadoBombaAtivos(r.bomba_estado_bitmask)
             .map(e => `<span class="badge ${e.alarme ? 'b-err' : 'b-warn'}" style="margin-left:3px;">${e.label}</span>`)
             .join('');
+        // Motivo do último desligamento -- só mostrado se não há estado ativo
+        // (quarentena/bloqueio já explicam a situação, evita redundância)
+        const motivoBadge = (!ativo && !estadoBadges)
+            ? `<span class="badge ${motivoDesligaInfo(r.bomba_motivo_desligamento).cls}" style="margin-left:3px;">${motivoDesligaInfo(r.bomba_motivo_desligamento).label}</span>`
+            : '';
         const pzemOk = pzemDisponivel(r);
         const wStr   = pzemOk && r.pzem_w   !== null && r.pzem_w   !== undefined ? r.pzem_w + ' W'                 : dash;
         const aStr   = pzemOk && r.pzem_a   !== null && r.pzem_a   !== undefined ? r.pzem_a.toFixed(2) + ' A'      : dash;
@@ -882,7 +909,7 @@ function renderTelemetria() {
         return `<tr class="${rowCls}">
             <td class="num">${formatISO(r.created_at)}</td>
             <td class="num">${pctStr}${cmStr}</td>
-            <td>${ativo ? '<span class="badge b-ok">Ligada</span>' : '<span class="badge b-off">Desligada</span>'}${estadoBadges}</td>
+            <td>${ativo ? '<span class="badge b-ok">Ligada</span>' : '<span class="badge b-off">Desligada</span>'}${estadoBadges}${motivoBadge}</td>
             <td>${r.bomba_offline ? '<span class="badge b-warn">Sem comunicação</span>' : errLabel}</td>
             <td>${ultrassonicoCell}</td>
             <td>${r.ladrao_ativo ? '<span class="badge b-warn">Ativo</span>' : dash}</td>

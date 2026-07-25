@@ -518,6 +518,19 @@ function motivoDesligaInfo(m) {
     return MOTIVO_DESLIGA[m] ?? MOTIVO_DESLIGA[0];
 }
 
+// origem_liga (OrigemComandoLiga, sessoes_marica) -- 2026-07-25. Origem REAL
+// do comando que ligou a bomba (não inferida por presença de celular no
+// momento -- isso confundiria BTN1 com celular na rede como "automático").
+const ORIGEM_LIGA = {
+    0: { label: 'Manual (botão)', cls: 'b-warn' },
+    1: { label: 'Manual (web)',   cls: 'b-warn' },
+    2: { label: 'Automático',     cls: 'b-blue' },
+};
+
+function origemLigaInfo(o) {
+    return ORIGEM_LIGA[o] ?? ORIGEM_LIGA[0];
+}
+
 function salvarAck(sig) {
     try { localStorage.setItem('erro_ack_sig', JSON.stringify(sig)); } catch(e) {}
     erroAckAssinatura = sig;
@@ -934,7 +947,7 @@ function renderSessoes() {
         const isManual = s.origem === 'manual';
         const origemBadge = isManual
             ? '<span class="badge b-warn">Manual · chave física</span>'
-            : '<span class="badge b-blue">Automático/Semiauto</span>';
+            : (() => { const oi = origemLigaInfo(s.origem_liga); return `<span class="badge ${oi.cls}">${oi.label}</span>`; })();
         const vc   = s.variacao_cm !== null && s.variacao_cm !== undefined ? (s.variacao_cm >= 0 ? '+' : '') + s.variacao_cm.toFixed(1) + ' cm' : '—';
         const vcl  = s.variacao_cm >= 0 ? 'c-ok' : 'c-err';
         const wMed = s.pzem_w_medio !== null && s.pzem_w_medio !== undefined

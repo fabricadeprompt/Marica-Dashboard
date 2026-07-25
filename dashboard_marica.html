@@ -107,6 +107,22 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 .badge-condensacao.visible { display: flex; }
 .badge-condensacao svg { width: 10px; height: 10px; stroke: currentColor; fill: none; stroke-width: 2; flex-shrink: 0; }
 
+/* ---- badge de diagnóstico da Controle (NTP/Wi-Fi/comando) ---- */
+.badge-diag {
+    display: none;
+    align-items: center; gap: 5px;
+    margin-top: 8px;
+    font-family: var(--mono); font-size: 10px; letter-spacing: .04em;
+    color: var(--warn);
+    background: rgba(245,166,35,.10);
+    border: 1px solid rgba(245,166,35,.25);
+    border-radius: 3px;
+    padding: 3px 8px;
+    width: fit-content;
+}
+.badge-diag.visible { display: flex; }
+.badge-diag svg { width: 10px; height: 10px; stroke: currentColor; fill: none; stroke-width: 2; flex-shrink: 0; }
+
 /* ---- bloco elétrico PZEM-004T ---- */
 .pzem-section { margin-bottom: 24px; }
 .pzem-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
@@ -256,7 +272,7 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
             <!-- Badge de condensação: visível quando agua_erro_sensor=true (modo_reflexao sem compensação, marica-097) -->
             <div class="badge-condensacao" id="badge-condensacao">
                 <svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 1 7 7c0 4-3 7-7 11C9 16 5 13 5 9a7 7 0 0 1 7-7z"/></svg>
-                Condensação no sensor
+                <span id="badge-condensacao-text">Condensação no sensor</span>
             </div>
         </div>
         <div class="card">
@@ -273,6 +289,11 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
             <div class="card-label">Wi-Fi Controle</div>
             <div class="card-val c-off" id="card-rssi" style="font-size:22px;padding-top:4px;">—</div>
             <div class="card-sub" id="card-rssi-sub">—</div>
+            <!-- Diagnóstico da Controle: NTP/Wi-Fi/comando -- só aparece quando algo não está OK -->
+            <div class="badge-diag" id="badge-diag">
+                <svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 1 7 7c0 4-3 7-7 11C9 16 5 13 5 9a7 7 0 0 1 7-7z"/></svg>
+                <span id="badge-diag-text"></span>
+            </div>
         </div>
     </div>
 
@@ -440,14 +461,53 @@ let ultimoBombaOffline = false;
 let autoTimer    = null;
 let erroAckAssinatura = JSON.parse(localStorage.getItem('erro_ack_sig') || 'null');
 
+// -------------------------------------------------------------
+// TRADUÇÃO DE CÓDIGOS DE ERRO/ESTADO — 2026-07-25
+// -------------------------------------------------------------
+// motivo_status da Água (MotivoStatusAgua em marica_protocol.h) -- detalha
+// a causa de agua_erro_sensor, que antes era só um booleano genérico.
+const MOTIVO_AGUA = {
+    0: { label: 'Normal',                  cls: 'b-ok'   },
+    1: { label: 'Compensando condensação', cls: 'b-blue' },
+    2: { label: 'Sensor sem eco',          cls: 'b-err'  },
+    3: { label: 'Condensação persistente', cls: 'b-err'  },
+    4: { label: 'Instabilidade no sensor', cls: 'b-err'  },
+};
+
+function motivoAguaInfo(m) {
+    return MOTIVO_AGUA[m] ?? MOTIVO_AGUA[0];
+}
+
+function motivoAguaBadge(m) {
+    const info = motivoAguaInfo(m);
+    return `<span class="badge ${info.cls}">${info.label}</span>`;
+}
+
+// bomba_estado_bitmask (BitmaskEstadoBomba) -- estados operacionais da Bomba,
+// SEPARADO de erros_ativos de propósito (ver marica_protocol.h). Não são
+// "erros" no mesmo sentido -- quarentena é normal por 5min após todo boot.
+const ESTADO_BOMBA_BITS = [
+    { bit: 1, label: 'Quarentena pós-boot',              alarme: false },
+    { bit: 2, label: 'Bloqueio temporário',               alarme: false },
+    { bit: 4, label: 'Modo forçado — requer reset manual', alarme: true  },
+];
+
+function estadoBombaAtivos(bitmask) {
+    if (!bitmask) return [];
+    return ESTADO_BOMBA_BITS.filter(e => bitmask & e.bit);
+}
+
 function salvarAck(sig) {
     try { localStorage.setItem('erro_ack_sig', JSON.stringify(sig)); } catch(e) {}
     erroAckAssinatura = sig;
 }
 
+// Inclui agua_motivo_status e bomba_estado_bitmask -- uma mudança de causa
+// (ex: condensação → sensor sem eco) gera assinatura nova, então um "erro"
+// já reconhecido não fica silenciado se o motivo real mudar por baixo.
 function calcularAssinatura(r) {
     const bits = r.erros_ativos || 0;
-    return `${bits}|${r.erro_sensor ? 1 : 0}|${r.ladrao_ativo ? 1 : 0}|${r.bomba_offline ? 1 : 0}|${r.agua_offline ? 1 : 0}`;
+    return `${bits}|${r.erro_sensor ? 1 : 0}|${r.ladrao_ativo ? 1 : 0}|${r.bomba_offline ? 1 : 0}|${r.agua_offline ? 1 : 0}|${r.agua_motivo_status || 0}|${r.bomba_estado_bitmask || 0}`;
 }
 
 function nivelPct(cm) {
@@ -514,7 +574,9 @@ function errosLabel(b, erroSensor, ladrao) {
 }
 
 function temErro(r) {
-    return (r.erros_ativos && r.erros_ativos !== 0) || r.erro_sensor || r.ladrao_ativo || r.bomba_offline || r.agua_offline;
+    const modoForcado = !!(r.bomba_estado_bitmask & 4);
+    return (r.erros_ativos && r.erros_ativos !== 0) || r.erro_sensor || r.ladrao_ativo ||
+           r.bomba_offline || r.agua_offline || modoForcado;
 }
 
 function pfLabel(pf) {
@@ -653,9 +715,13 @@ function atualizarCards(r) {
     bar.style.width      = bp + '%';
     bar.style.background = bp > 50 ? 'var(--accent)' : bp > 20 ? 'var(--warn)' : 'var(--err)';
 
-    // Badge de condensação: agua_erro_sensor=true (marica-097), só quando há dado confiável
+    // Badge de condensação: agora usa o motivo específico (agua_motivo_status,
+    // 2026-07-25) em vez de um texto fixo -- distingue condensação/sem eco/
+    // instabilidade, que antes eram todos "Condensação no sensor".
     const badgeCond = document.getElementById('badge-condensacao');
     if (disponivel && emCondensacao(r)) {
+        const info = motivoAguaInfo(r.agua_motivo_status);
+        document.getElementById('badge-condensacao-text').textContent = info.label;
         badgeCond.classList.add('visible');
     } else {
         badgeCond.classList.remove('visible');
@@ -664,9 +730,11 @@ function atualizarCards(r) {
     const elB = document.getElementById('card-bomba');
     elB.textContent = r.bomba_ligada ? 'LIGADA' : 'DESLIGADA';
     elB.className   = 'card-val ' + (r.bomba_ligada ? 'c-ok' : 'c-off');
+    const estadosBomba = estadoBombaAtivos(r.bomba_estado_bitmask);
     document.getElementById('card-bomba-sub').textContent = r.bomba_offline
         ? 'Sem comunicação'
-        : (r.bomba_ligada ? 'Motor em operação' : 'Normal');
+        : (r.bomba_ligada ? 'Motor em operação'
+            : (estadosBomba.length ? estadosBomba.map(e => e.label).join(' · ') : 'Normal'));
 
     const elC = document.getElementById('card-celular');
     elC.textContent = r.celular_presente ? 'PRESENTE' : 'AUSENTE';
@@ -678,6 +746,20 @@ function atualizarCards(r) {
     elR.textContent = rssi ? rssi + ' dBm' : '—';
     elR.className   = 'card-val ' + (rssi >= -70 ? 'c-ok' : rssi >= -80 ? 'c-warn' : 'c-err');
     document.getElementById('card-rssi-sub').textContent = rssiLabel(rssi);
+
+    // Diagnóstico da Controle (NTP/Wi-Fi/comando, 2026-07-25) -- só aparece
+    // quando algo não está OK, pra não poluir o card no dia a dia.
+    const diagMsgs = [];
+    if (r.ntp_sincronizado === false) diagMsgs.push('NTP não sincronizado');
+    if (r.wifi_falhou)                diagMsgs.push('Última tentativa de Wi-Fi falhou');
+    if (r.comando_falhou)             diagMsgs.push('Último comando ao rádio falhou');
+    const badgeDiag = document.getElementById('badge-diag');
+    if (diagMsgs.length) {
+        document.getElementById('badge-diag-text').textContent = diagMsgs.join(' · ');
+        badgeDiag.classList.add('visible');
+    } else {
+        badgeDiag.classList.remove('visible');
+    }
 
     atualizarBlocoPzem(r);
 
@@ -692,8 +774,14 @@ function atualizarCards(r) {
         if (r.erros_ativos & 4)  msgs.push('Ladrão ativo');
         if (r.erros_ativos & 16) msgs.push('Falha PZEM');
         if (r.agua_offline)      msgs.push('Sem comunicação com a Água');
-        if (r.erro_sensor && !r.agua_offline) msgs.push('Umidade detectada no sensor ultrassônico');
+        // Motivo específico (2026-07-25) em vez do texto genérico "Umidade detectada"
+        if (r.erro_sensor && !r.agua_offline) {
+            msgs.push('Sensor da Água: ' + motivoAguaInfo(r.agua_motivo_status).label);
+        }
         if (r.ladrao_ativo)      msgs.push('Ladrão ativo');
+        // Só modo_forcado sobe pro alarme -- quarentena/bloqueio são estados
+        // temporários esperados, não precisam de alarme vermelho.
+        estadoBombaAtivos(r.bomba_estado_bitmask).forEach(e => { if (e.alarme) msgs.push(e.label); });
         document.getElementById('alarm-text').textContent = '⚠ FALHA: ' + [...new Set(msgs)].join(' | ');
         banner.classList.add('visible');
     } else {
@@ -776,18 +864,27 @@ function renderTelemetria() {
         const rowCls = isAck ? 'ack-row' : '';
         const errLabel = errosLabel(r.erros_ativos || 0, r.erro_sensor, r.ladrao_ativo);
         const ativo    = r.bomba_ligada;
+        // Badges de estado (quarentena/bloqueio/modo forçado) ao lado do Ligada/Desligada
+        const estadoBadges = estadoBombaAtivos(r.bomba_estado_bitmask)
+            .map(e => `<span class="badge ${e.alarme ? 'b-err' : 'b-warn'}" style="margin-left:3px;">${e.label}</span>`)
+            .join('');
         const pzemOk = pzemDisponivel(r);
         const wStr   = pzemOk && r.pzem_w   !== null && r.pzem_w   !== undefined ? r.pzem_w + ' W'                 : dash;
         const aStr   = pzemOk && r.pzem_a   !== null && r.pzem_a   !== undefined ? r.pzem_a.toFixed(2) + ' A'      : dash;
         const vStr   = pzemOk && r.pzem_v   !== null && r.pzem_v   !== undefined ? r.pzem_v.toFixed(1) + ' V'      : dash;
         const pfStr  = pzemOk && r.pzem_pf  !== null && r.pzem_pf  !== undefined ? r.pzem_pf.toFixed(2)            : dash;
         const kwhStr = pzemOk && r.pzem_kwh !== null && r.pzem_kwh !== undefined ? r.pzem_kwh.toFixed(2) + ' kWh'  : dash;
+        // Ultrassônico: motivo específico (agua_motivo_status) em vez do
+        // texto genérico "Umidade detectada" -- 2026-07-25
+        const ultrassonicoCell = r.agua_offline
+            ? '<span class="badge b-warn">Sem comunicação</span>'
+            : (r.erro_sensor ? motivoAguaBadge(r.agua_motivo_status) : dash);
         return `<tr class="${rowCls}">
             <td class="num">${formatISO(r.created_at)}</td>
             <td class="num">${pctStr}${cmStr}</td>
-            <td>${ativo ? '<span class="badge b-ok">Ligada</span>' : '<span class="badge b-off">Desligada</span>'}</td>
+            <td>${ativo ? '<span class="badge b-ok">Ligada</span>' : '<span class="badge b-off">Desligada</span>'}${estadoBadges}</td>
             <td>${r.bomba_offline ? '<span class="badge b-warn">Sem comunicação</span>' : errLabel}</td>
-            <td>${r.agua_offline ? '<span class="badge b-warn">Sem comunicação</span>' : r.erro_sensor ? '<span class="badge b-err">Umidade detectada</span>' : dash}</td>
+            <td>${ultrassonicoCell}</td>
             <td>${r.ladrao_ativo ? '<span class="badge b-warn">Ativo</span>' : dash}</td>
             <td>${r.celular_presente ? '<span class="badge b-blue">Presente</span>' : dash}</td>
             <td class="num">${wStr}</td>

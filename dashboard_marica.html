@@ -363,9 +363,7 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
                     <th class="num">Data/hora</th>
                     <th class="num">Nível</th>
                     <th>Bomba</th>
-                    <th>Erros</th>
-                    <th>Ultrassônico</th>
-                    <th>Ladrão</th>
+                    <th>Eventos</th>
                     <th>Celular</th>
                     <th class="num">W</th>
                     <th class="num">A</th>
@@ -375,7 +373,7 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
                     <th class="num">RSSI</th>
                 </tr></thead>
                 <tbody id="tbody-telemetria">
-                    <tr><td colspan="13" style="text-align:center;color:var(--txt2);padding:24px;">Carregando dados...</td></tr>
+                    <tr><td colspan="11" style="text-align:center;color:var(--txt2);padding:24px;">Carregando dados...</td></tr>
                 </tbody>
             </table>
             </div>
@@ -582,14 +580,28 @@ function motivoLabel(m) {
     return '<span class="badge b-err">Erro</span>';
 }
 
-function errosLabel(b, erroSensor, ladrao) {
-    const e = [];
-    if (b & 1)  e.push('Timeout');
-    if (b & 4)  e.push('Ladrão');
-    if (b & 16) e.push('PZEM');
-    if (erroSensor) e.push('Sensor');
-    if (!e.length) return '<span style="color:var(--txt3);">—</span>';
-    return e.map(x => `<span class="badge b-err" style="margin-right:2px;">${x}</span>`).join('');
+// Consolida Erros+Ultrassônico+Ladrão numa coluna só (2026-08-06). Cada fonte
+// gera seu próprio badge -- Bomba offline e Água offline são independentes
+// (nós diferentes) e não se escondem mais uma à outra como acontecia antes.
+// Dedup por label: erros_ativos bit4 e ladrao_ativo podem sinalizar o mesmo
+// evento em paralelo -- evita "Ladrão" duplicado se os dois dispararem juntos.
+function eventosLabel(r) {
+    const badges = [];
+    if (r.bomba_offline) badges.push({ label: 'Bomba offline', cls: 'b-warn' });
+    const b = r.erros_ativos || 0;
+    if (b & 1)                    badges.push({ label: 'Timeout',  cls: 'b-err' });
+    if ((b & 4) || r.ladrao_ativo) badges.push({ label: 'Ladrão',  cls: 'b-err' });
+    if (b & 16)                   badges.push({ label: 'PZEM',    cls: 'b-err' });
+    if (r.agua_offline) {
+        badges.push({ label: 'Água offline', cls: 'b-warn' });
+    } else if (r.erro_sensor) {
+        const info = motivoAguaInfo(r.agua_motivo_status);
+        badges.push({ label: info.label, cls: info.cls });
+    }
+    const vistos = new Set();
+    const unicos = badges.filter(x => !vistos.has(x.label) && vistos.add(x.label));
+    if (!unicos.length) return '<span style="color:var(--txt3);">—</span>';
+    return unicos.map(x => `<span class="badge ${x.cls}" style="margin-right:2px;">${x.label}</span>`).join('');
 }
 
 function temErro(r) {
@@ -822,7 +834,7 @@ async function carregarTelemetria() {
             : `${dadosTel.length} de ${t} registros`;
     } catch(e) {
         document.getElementById('tbody-telemetria').innerHTML =
-            '<tr><td colspan="13" style="text-align:center;color:var(--err);padding:24px;">Erro ao carregar. Verifique a conexão.</td></tr>';
+            '<tr><td colspan="11" style="text-align:center;color:var(--err);padding:24px;">Erro ao carregar. Verifique a conexão.</td></tr>';
     }
 }
 
@@ -857,7 +869,7 @@ async function carregarSessoes() {
 function renderTelemetria() {
     const tbody = document.getElementById('tbody-telemetria');
     if (!dadosTel.length) {
-        tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--txt2);padding:24px;">Nenhum registro no período.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--txt2);padding:24px;">Nenhum registro no período.</td></tr>';
         return;
     }
     const dash = '<span style="color:var(--txt3);">—</span>';
@@ -869,35 +881,19 @@ function renderTelemetria() {
         const sigRow = calcularAssinatura(r);
         const isAck  = temErro(r) && erroAckAssinatura === sigRow;
         const rowCls = isAck ? 'ack-row' : '';
-        const errLabel = errosLabel(r.erros_ativos || 0, r.erro_sensor, r.ladrao_ativo);
+        const evtLabel = eventosLabel(r);
         const ativo    = r.bomba_ligada;
-        // Badges de estado (quarentena/bloqueio/modo forçado) ao lado do Ligada/Desligada
-        const estadoBadges = estadoBombaAtivos(r.bomba_estado_bitmask)
-            .map(e => `<span class="badge ${e.alarme ? 'b-err' : 'b-warn'}" style="margin-left:3px;">${e.label}</span>`)
-            .join('');
-        // Motivo do último desligamento -- só mostrado se não há estado ativo
-        // (quarentena/bloqueio já explicam a situação, evita redundância)
-        const motivoBadge = (!ativo && !estadoBadges)
-            ? `<span class="badge ${causaDesligamentoInfo(r.bomba_causa_desligamento).cls}" style="margin-left:3px;">${causaDesligamentoInfo(r.bomba_causa_desligamento).label}</span>`
-            : '';
         const pzemOk = pzemDisponivel(r);
         const wStr   = pzemOk && r.pzem_w   !== null && r.pzem_w   !== undefined ? r.pzem_w + ' W'                 : dash;
         const aStr   = pzemOk && r.pzem_a   !== null && r.pzem_a   !== undefined ? r.pzem_a.toFixed(2) + ' A'      : dash;
         const vStr   = pzemOk && r.pzem_v   !== null && r.pzem_v   !== undefined ? r.pzem_v.toFixed(1) + ' V'      : dash;
         const pfStr  = pzemOk && r.pzem_pf  !== null && r.pzem_pf  !== undefined ? r.pzem_pf.toFixed(2)            : dash;
         const kwhStr = pzemOk && r.pzem_kwh !== null && r.pzem_kwh !== undefined ? r.pzem_kwh.toFixed(2) + ' kWh'  : dash;
-        // Ultrassônico: motivo específico (agua_motivo_status) em vez do
-        // texto genérico "Umidade detectada" -- 2026-07-25
-        const ultrassonicoCell = r.agua_offline
-            ? '<span class="badge b-warn">Sem comunicação</span>'
-            : (r.erro_sensor ? motivoAguaBadge(r.agua_motivo_status) : dash);
         return `<tr class="${rowCls}">
             <td class="num">${formatISO(r.created_at)}</td>
             <td class="num">${pctStr}${cmStr}</td>
-            <td>${ativo ? '<span class="badge b-ok">Ligada</span>' : '<span class="badge b-off">Desligada</span>'}${estadoBadges}${motivoBadge}</td>
-            <td>${r.bomba_offline ? '<span class="badge b-warn">Sem comunicação</span>' : errLabel}</td>
-            <td>${ultrassonicoCell}</td>
-            <td>${r.ladrao_ativo ? '<span class="badge b-warn">Ativo</span>' : dash}</td>
+            <td>${ativo ? '<span class="badge b-ok">Ligada</span>' : '<span class="badge b-off">Desligada</span>'}</td>
+            <td>${evtLabel}</td>
             <td>${r.celular_presente ? '<span class="badge b-blue">Presente</span>' : dash}</td>
             <td class="num">${wStr}</td>
             <td class="num">${aStr}</td>

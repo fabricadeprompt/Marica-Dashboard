@@ -129,7 +129,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 .pzem-title { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; text-transform: uppercase; color: var(--txt3); }
 .pzem-badge { font-family: var(--mono); font-size: 10px; padding: 2px 8px; border: 1px solid var(--border2); border-radius: 3px; color: var(--txt3); }
 .pzem-unavail { font-family: var(--mono); font-size: 11px; color: var(--txt3); padding: 12px 0; font-style: italic; }
-.pzem-cards { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px; }
+.pzem-cards { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
 .pzem-card { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; transition: border-color .3s; }
 .pzem-card.highlight { border-color: var(--border2); }
 .pzem-card-label { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; color: var(--txt2); text-transform: uppercase; margin-bottom: 10px; }
@@ -281,11 +281,9 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
             <div class="card-sub" id="card-bomba-sub">—</div>
         </div>
         <div class="card">
-      <div class="card">
-    <div class="card-label">Sistema</div>
-    <div class="card-val c-off" id="card-celular" style="font-size:16px;padding-top:6px;">—</div>
-    <div class="card-sub" id="card-celular-sub">—</div>
-</div>
+            <div class="card-label">Sistema</div>
+            <div class="card-val c-off" id="card-celular" style="font-size:16px;padding-top:6px;">—</div>
+            <div class="card-sub" id="card-celular-sub">—</div>
         </div>
         <div class="card">
             <div class="card-label">Wi-Fi Controle</div>
@@ -308,25 +306,10 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
         </div>
         <div id="pzem-unavail" class="pzem-unavail">Bomba desligada — dados elétricos indisponíveis.</div>
         <div class="pzem-cards" id="pzem-cards" style="display:none;">
-            <div class="pzem-card highlight">
-                <div class="pzem-card-label">Potência</div>
-                <div class="pzem-card-val" id="pzem-w">—<span class="pzem-card-unit">W</span></div>
-                <div class="pzem-card-sub" id="pzem-w-sub">—</div>
-            </div>
-            <div class="pzem-card">
-                <div class="pzem-card-label">Corrente</div>
-                <div class="pzem-card-val" id="pzem-a">—<span class="pzem-card-unit">A</span></div>
-                <div class="pzem-card-sub">instantânea</div>
-            </div>
             <div class="pzem-card">
                 <div class="pzem-card-label">Tensão</div>
                 <div class="pzem-card-val" id="pzem-v">—<span class="pzem-card-unit">V</span></div>
                 <div class="pzem-card-sub">rede 220 V</div>
-            </div>
-            <div class="pzem-card">
-                <div class="pzem-card-label">Fator de potência</div>
-                <div class="pzem-card-val" id="pzem-pf">—</div>
-                <div class="pzem-card-sub" id="pzem-pf-sub">—</div>
             </div>
             <div class="pzem-card">
                 <div class="pzem-card-label">Energia acumulada</div>
@@ -443,7 +426,7 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
 const SUPABASE_URL = 'https://dgnjyzyalnrxpvnyahfd.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_ST1iCvU8hUc-wl19RQIV_g_8FfxXNEH';
 
-const CAIXA_CHEIA_CM = 30;   // era 40
+const CAIXA_CHEIA_CM       = 30;
 const CAIXA_VAZIA_CM       = 70;
 const STALE_MS             = 15 * 60 * 1000;
 
@@ -713,22 +696,9 @@ function atualizarBlocoPzem(r) {
     cards.style.display   = 'grid';
     unavail.style.display = 'none';
 
-    document.getElementById('pzem-w').innerHTML =
-        `${r.pzem_w}<span class="pzem-card-unit">W</span>`;
-    document.getElementById('pzem-w-sub').textContent = 'potência ativa';
-
-    document.getElementById('pzem-a').innerHTML =
-        r.pzem_a !== null && r.pzem_a !== undefined
-            ? `${r.pzem_a.toFixed(2)}<span class="pzem-card-unit">A</span>` : '—';
-
     document.getElementById('pzem-v').innerHTML =
         r.pzem_v !== null && r.pzem_v !== undefined
             ? `${r.pzem_v.toFixed(1)}<span class="pzem-card-unit">V</span>` : '—';
-
-    const pf = r.pzem_pf !== null && r.pzem_pf !== undefined ? r.pzem_pf : null;
-    document.getElementById('pzem-pf').innerHTML =
-        pf !== null ? `<span style="${pfColor(pf)}">${pf.toFixed(2)}</span>` : '—';
-    document.getElementById('pzem-pf-sub').textContent = pfLabel(pf);
 
     document.getElementById('pzem-kwh').innerHTML =
         r.pzem_kwh !== null && r.pzem_kwh !== undefined
@@ -771,10 +741,11 @@ function atualizarCards(r) {
         ? 'Sem comunicação'
         : (r.bomba_ligada ? 'Motor em operação'
             : (estadosBomba.length ? estadosBomba.map(e => e.label).join(' · ')
-const elC = document.getElementById('card-celular');
-elC.textContent = r.celular_presente ? 'AUTOMATICO' : 'SEMI-AUTOMATICO';
-elC.className   = 'card-val ' + (r.celular_presente ? 'c-blue' : 'c-off');
-document.getElementById('card-celular-sub').textContent = r.celular_presente ? 'Celular na rede' : '—';    elC.className   = 'card-val ' + (r.celular_presente ? 'c-blue' : 'c-off');
+                : 'Último desligamento: ' + causaDesligamentoInfo(r.bomba_causa_desligamento).label));
+
+    const elC = document.getElementById('card-celular');
+    elC.textContent = r.celular_presente ? 'AUTOMATICO' : 'SEMI-AUTOMATICO';
+    elC.className   = 'card-val ' + (r.celular_presente ? 'c-blue' : 'c-off');
     document.getElementById('card-celular-sub').textContent = r.celular_presente ? 'Celular na rede' : '—';
 
     const rssi = r.wifi_rssi;

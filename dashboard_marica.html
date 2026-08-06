@@ -279,6 +279,9 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
             <div class="card-label">Bomba</div>
             <div class="card-val c-off" id="card-bomba" style="font-size:16px;padding-top:6px;">—</div>
             <div class="card-sub" id="card-bomba-sub">—</div>
+            <!-- Prova de vida do auto-teste de relé (marica-213) -- sempre visível,
+                 não só quando falha, pra confirmar que a checagem de segurança está ativa -->
+            <div class="card-sub" id="card-autoteste" style="margin-top:4px;">—</div>
         </div>
         <div class="card">
             <div class="card-label">Sistema</div>
@@ -473,6 +476,7 @@ const ESTADO_BOMBA_BITS = [
     { bit: 1, label: 'Quarentena pós-boot',              alarme: false },
     { bit: 2, label: 'Bloqueio temporário',               alarme: false },
     { bit: 4, label: 'Modo forçado — requer reset manual', alarme: true  },
+    { bit: 8, label: 'Relé colado — requer troca da placa', alarme: true  },  // 2026-08-06 -- ESTADO_RELE_COLADO
 ];
 
 function estadoBombaAtivos(bitmask) {
@@ -572,6 +576,20 @@ function formatDuracao(s) {
     if (h > 0) return `${h}h ${m}min`;
     if (m > 0) return `${m}min ${ss}s`;
     return `${ss}s`;
+}
+
+// 2026-08-06 -- "há Xh"/"há Xmin" a partir de um timestamp ISO8601 (ex: ultimo_autoteste_at)
+function haTempo(isoString) {
+    if (!isoString) return null;
+    const ms = Date.now() - new Date(isoString).getTime();
+    if (ms < 0) return 'agora';
+    const s = Math.floor(ms / 1000);
+    if (s < 60) return 'há ' + s + 's';
+    const m = Math.floor(s / 60);
+    if (m < 60) return 'há ' + m + 'min';
+    const h = Math.floor(m / 60);
+    if (h < 48) return 'há ' + h + 'h';
+    return 'há ' + Math.floor(h / 24) + 'd';
 }
 
 function motivoLabel(m) {
@@ -754,6 +772,22 @@ function atualizarCards(r) {
         : (r.bomba_ligada ? 'Motor em operação'
             : (estadosBomba.length ? estadosBomba.map(e => e.label).join(' · ')
                 : 'Último desligamento: ' + causaDesligamentoInfo(r.bomba_causa_desligamento).label));
+
+    // 2026-08-06 -- Auto-teste de relé: sempre visível, mostra OK ou FALHOU +
+    // "há Xh" mesmo sem falha, como prova de que a checagem está rodando (marica-213)
+    const elAutoteste  = document.getElementById('card-autoteste');
+    const releColado   = !!(r.bomba_estado_bitmask & 8);  // ESTADO_RELE_COLADO
+    const haAutoteste  = haTempo(r.ultimo_autoteste_at);
+    if (releColado) {
+        elAutoteste.textContent = 'Auto-teste: FALHOU' + (haAutoteste ? ' · ' + haAutoteste : '');
+        elAutoteste.style.color = 'var(--err)';
+    } else if (haAutoteste) {
+        elAutoteste.textContent = 'Auto-teste: OK · ' + haAutoteste;
+        elAutoteste.style.color = 'var(--txt3)';
+    } else {
+        elAutoteste.textContent = 'Auto-teste: —';
+        elAutoteste.style.color = 'var(--txt3)';
+    }
 
     const elC = document.getElementById('card-celular');
     elC.textContent = r.celular_presente ? 'AUTOMATICO' : 'SEMI-AUTOMATICO';

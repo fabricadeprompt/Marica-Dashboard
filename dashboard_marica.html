@@ -79,7 +79,7 @@ body { background: var(--bg); color: var(--txt); font-family: var(--sans); font-
 main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 
 /* ---- bloco principal ---- */
-.cards { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-bottom: 12px; }
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; margin-bottom: 12px; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 16px 18px; transition: border-color .3s; }
 .card-label { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: var(--txt2); text-transform: uppercase; margin-bottom: 12px; }
 .card-val   { font-family: var(--mono); font-size: 26px; font-weight: 500; line-height: 1; }
@@ -285,11 +285,6 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
             <div class="card-sub" id="card-autoteste" style="margin-top:4px;">—</div>
         </div>
         <div class="card">
-            <div class="card-label">Sistema</div>
-            <div class="card-val c-off" id="card-celular" style="font-size:16px;padding-top:6px;">—</div>
-            <div class="card-sub" id="card-celular-sub">—</div>
-        </div>
-        <div class="card">
             <div class="card-label">Wi-Fi Controle</div>
             <div class="card-val c-off" id="card-rssi" style="font-size:22px;padding-top:4px;">—</div>
             <div class="card-sub" id="card-rssi-sub">—</div>
@@ -330,7 +325,6 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
             <div class="legend">
                 <div class="leg"><div class="leg-line" style="background:var(--accent);"></div>Nível (%)</div>
                 <div class="leg"><div class="leg-line" style="background:var(--blue);"></div>Bomba ligada</div>
-                <div class="leg"><div class="leg-dot" style="background:var(--err);"></div>Erro ativo</div>
             </div>
         </div>
         <div class="chart-wrap"><canvas id="chart-nivel"></canvas></div>
@@ -368,7 +362,6 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
                     <th class="num">Nível</th>
                     <th>Bomba</th>
                     <th>Eventos</th>
-                    <th>Celular</th>
                     <th class="num">W</th>
                     <th class="num">A</th>
                     <th class="num">V</th>
@@ -377,7 +370,7 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
                     <th class="num">RSSI</th>
                 </tr></thead>
                 <tbody id="tbody-telemetria">
-                    <tr><td colspan="11" style="text-align:center;color:var(--txt2);padding:24px;">Carregando dados...</td></tr>
+                    <tr><td colspan="10" style="text-align:center;color:var(--txt2);padding:24px;">Carregando dados...</td></tr>
                 </tbody>
             </table>
             </div>
@@ -506,18 +499,11 @@ function causaDesligamentoInfo(m) {
     return CAUSA_DESLIGA_BOMBA[m] ?? CAUSA_DESLIGA_BOMBA[0];
 }
 
-// origem_liga (OrigemComandoLiga, sessoes_marica) -- 2026-07-25. Origem REAL
-// do comando que ligou a bomba (não inferida por presença de celular no
-// momento -- isso confundiria BTN1 com celular na rede como "automático").
-const ORIGEM_LIGA = {
-    0: { label: 'Manual (botão)', cls: 'b-warn' },
-    1: { label: 'Manual (web)',   cls: 'b-warn' },
-    2: { label: 'Automático',     cls: 'b-blue' },
-};
-
-function origemLigaInfo(o) {
-    return ORIGEM_LIGA[o] ?? ORIGEM_LIGA[0];
-}
+// 2026-08-07 -- ORIGEM_LIGA removido: origem_liga (Manual botão/Manual web/
+// Automático) permitia inferir presença de celular na residência (Automático
+// só dispara com celular detectado na rede, main_controle.cpp). Coluna
+// excluída na origem (sessoes_marica_publica, marica-231) -- não chega mais
+// no payload, então a distinção nem é possível de fazer aqui.
 
 function salvarAck(sig) {
     try { localStorage.setItem('erro_ack_sig', JSON.stringify(sig)); } catch(e) {}
@@ -564,11 +550,20 @@ function pzemDisponivel(r) {
     return !r.bomba_offline && r.pzem_w !== null && r.pzem_w !== undefined;
 }
 
+// 2026-08-07 -- ancorado em America/Sao_Paulo (achado de revisão Gemini): antes usava
+// getFullYear()/getHours()/etc, que são sempre o fuso LOCAL de quem está vendo a página,
+// não o fuso real do sistema (Maricá/Brasília). Se acessado de fora do Brasil, os horários
+// de operação da bomba apareciam deslocados -- ruim pra auditar o horário permitido (09-18h).
+const FUSO_SISTEMA = 'America/Sao_Paulo';
+
 function formatISO(iso) {
     if (!iso) return '—';
     const d = new Date(iso);
-    const p = n => String(n).padStart(2,'0');
-    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+    const partes = new Intl.DateTimeFormat('pt-BR', {
+        timeZone: FUSO_SISTEMA, year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    }).formatToParts(d).reduce((acc, p) => { acc[p.type] = p.value; return acc; }, {});
+    return `${partes.year}-${partes.month}-${partes.day} ${partes.hour}:${partes.minute}:${partes.second}`;
 }
 
 function formatDuracao(s) {
@@ -653,10 +648,18 @@ function rssiLabel(rssi) {
 
 function atualizarRelogio() {
     const d    = new Date();
-    const dias = ['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
     const mes  = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+    // 2026-08-07 -- ancorado em America/Sao_Paulo (ver comentário em formatISO()) --
+    // usa Intl.DateTimeFormat com timeZone explícito em vez de d.getDay()/toLocaleTimeString()
+    // (que seguem o fuso do navegador de quem está vendo, não o fuso real do sistema).
+    const fmtDia = new Intl.DateTimeFormat('en-US', { timeZone: FUSO_SISTEMA, weekday: 'short' }).format(d);
+    const partes = new Intl.DateTimeFormat('pt-BR', {
+        timeZone: FUSO_SISTEMA, day: '2-digit', month: 'numeric', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    }).formatToParts(d).reduce((acc, p) => { acc[p.type] = p.value; return acc; }, {});
+    const diaSemana = { Sun:'Domingo', Mon:'Segunda', Tue:'Terça', Wed:'Quarta', Thu:'Quinta', Fri:'Sexta', Sat:'Sábado' }[fmtDia];
     document.getElementById('datetime-display').innerHTML =
-        `${dias[d.getDay()]}, ${d.getDate()} ${mes[d.getMonth()]} ${d.getFullYear()}<br>${d.toLocaleTimeString('pt-BR')}`;
+        `${diaSemana}, ${partes.day} ${mes[parseInt(partes.month,10)-1]} ${partes.year}<br>${partes.hour}:${partes.minute}:${partes.second} (Brasília)`;
 }
 
 // v2: agora também considera bomba_offline (sinal explícito enviado pela Controle,
@@ -790,11 +793,6 @@ function atualizarCards(r) {
         elAutoteste.style.color = 'var(--txt3)';
     }
 
-    const elC = document.getElementById('card-celular');
-    elC.textContent = r.celular_presente ? 'AUTOMATICO' : 'SEMI-AUTOMATICO';
-    elC.className   = 'card-val ' + (r.celular_presente ? 'c-blue' : 'c-off');
-    document.getElementById('card-celular-sub').textContent = r.celular_presente ? 'Celular na rede' : '—';
-
     const rssi = r.wifi_rssi;
     const elR  = document.getElementById('card-rssi');
     elR.textContent = rssi ? rssi + ' dBm' : '—';
@@ -848,7 +846,7 @@ async function carregarTelemetria() {
     const ord = ordem === 'desc' ? 'created_at.desc' : 'created_at.asc';
     const filtroExtra = filtroAoVivo ? '&wifi_rssi=not.is.null' : '';
     try {
-        const { data, total } = await fetchSupabase('telemetria_marica',
+        const { data, total } = await fetchSupabase('telemetria_marica_publica',
             `created_at=gte.${ini}&created_at=lte.${fim}${filtroExtra}&order=${ord}&limit=1000`);
         dadosTel = data || [];
         renderTelemetria();
@@ -869,7 +867,7 @@ async function carregarTelemetria() {
             : `${dadosTel.length} de ${t} registros`;
     } catch(e) {
         document.getElementById('tbody-telemetria').innerHTML =
-            '<tr><td colspan="11" style="text-align:center;color:var(--err);padding:24px;">Erro ao carregar. Verifique a conexão.</td></tr>';
+            '<tr><td colspan="10" style="text-align:center;color:var(--err);padding:24px;">Erro ao carregar. Verifique a conexão.</td></tr>';
     }
 }
 
@@ -878,7 +876,7 @@ async function carregarSessoes() {
     const ord = ordem === 'desc' ? 'inicio.desc' : 'inicio.asc';
     try {
         const [auto, manual] = await Promise.all([
-            fetchSupabase('sessoes_marica', `created_at=gte.${ini}&created_at=lte.${fim}&order=${ord}&limit=500`),
+            fetchSupabase('sessoes_marica_publica', `inicio=gte.${ini}&inicio=lte.${fim}&order=${ord}&limit=500`),
             fetchSupabase('sessoes_manuais_marica', `inicio=gte.${ini}&inicio=lte.${fim}&order=${ord}&limit=500`)
         ]);
         const dAuto   = (auto.data   || []).map(s => ({ ...s, origem: 'auto'   }));
@@ -904,7 +902,7 @@ async function carregarSessoes() {
 function renderTelemetria() {
     const tbody = document.getElementById('tbody-telemetria');
     if (!dadosTel.length) {
-        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--txt2);padding:24px;">Nenhum registro no período.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--txt2);padding:24px;">Nenhum registro no período.</td></tr>';
         return;
     }
     const dash = '<span style="color:var(--txt3);">—</span>';
@@ -929,7 +927,6 @@ function renderTelemetria() {
             <td class="num">${pctStr}${cmStr}</td>
             <td>${ativo ? '<span class="badge b-ok">Ligada</span>' : '<span class="badge b-off">Desligada</span>'}</td>
             <td>${evtLabel}</td>
-            <td>${r.celular_presente ? '<span class="badge b-blue">Presente</span>' : dash}</td>
             <td class="num">${wStr}</td>
             <td class="num">${aStr}</td>
             <td class="num">${vStr}</td>
@@ -950,7 +947,7 @@ function renderSessoes() {
         const isManual = s.origem === 'manual';
         const origemBadge = isManual
             ? '<span class="badge b-warn">Manual · chave física</span>'
-            : (() => { const oi = origemLigaInfo(s.origem_liga); return `<span class="badge ${oi.cls}">${oi.label}</span>`; })();
+            : '<span class="badge b-off">Comando remoto</span>';
         const vc   = s.variacao_cm !== null && s.variacao_cm !== undefined ? (s.variacao_cm >= 0 ? '+' : '') + s.variacao_cm.toFixed(1) + ' cm' : '—';
         const vcl  = s.variacao_cm >= 0 ? 'c-ok' : 'c-err';
         const wMed = s.pzem_w_medio !== null && s.pzem_w_medio !== undefined
@@ -1072,7 +1069,11 @@ function renderGrafico() {
 function exportarCSV(tipo) {
     const dados = tipo === 'telemetria' ? dadosTel : dadosSes;
     if (!dados.length) return;
-    const cols = Object.keys(dados[0]);
+    // 2026-08-07 -- união de chaves de todos os itens, não só dados[0] (achado de
+    // revisão Gemini): dadosSes mescla sessoes_marica e sessoes_manuais_marica, que
+    // têm esquemas diferentes (ex: pzem_kwh_sessao vs pzem_kwh_consumido). Usar só
+    // as chaves do primeiro item perdia colunas silenciosamente conforme a ordem.
+    const cols = Array.from(new Set(dados.flatMap(Object.keys)));
     const rows = [cols.join(',')];
     dados.forEach(r => rows.push(cols.map(c => JSON.stringify(r[c] ?? '')).join(',')));
     const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });

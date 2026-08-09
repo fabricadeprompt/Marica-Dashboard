@@ -471,11 +471,17 @@ const ESTADO_BOMBA_BITS = [
     { bit: 2, label: 'Bloqueio temporário',               alarme: false },
     { bit: 4, label: 'Modo forçado — requer reset manual', alarme: true  },
     { bit: 8, label: 'Relé colado — requer troca da placa', alarme: true  },  // 2026-08-06 -- ESTADO_RELE_COLADO
+    { bit: 16, label: 'K1 colado — requer troca da placa', alarme: true },   // 2026-08-09 -- ESTADO_K1_COLADO
+    { bit: 32, label: 'K2 colado — requer troca da placa', alarme: true },   // 2026-08-09 -- ESTADO_K2_COLADO
 ];
 
 function estadoBombaAtivos(bitmask) {
     if (!bitmask) return [];
-    return ESTADO_BOMBA_BITS.filter(e => bitmask & e.bit);
+    // 2026-08-09 -- se K1 ou K2 especificamente já veio (bits 16/32, sempre setados junto
+    // com o bit 8 genérico por design do firmware), omite o bit 8 pra não duplicar a mesma
+    // informação de forma menos específica.
+    const temEspecifico = (bitmask & 16) || (bitmask & 32);
+    return ESTADO_BOMBA_BITS.filter(e => (bitmask & e.bit) && !(temEspecifico && e.bit === 8));
 }
 
 // bomba_causa_desligamento (CausaDesligamentoBomba) -- causa do último
@@ -780,10 +786,15 @@ function atualizarCards(r) {
     // 2026-08-06 -- Auto-teste de relé: sempre visível, mostra OK ou FALHOU +
     // "há Xh" mesmo sem falha, como prova de que a checagem está rodando (marica-213)
     const elAutoteste  = document.getElementById('card-autoteste');
-    const releColado   = !!(r.bomba_estado_bitmask & 8);  // ESTADO_RELE_COLADO
+    const releColado   = !!(r.bomba_estado_bitmask & 8);   // ESTADO_RELE_COLADO
+    const k1Colado     = !!(r.bomba_estado_bitmask & 16);  // 2026-08-09 -- ESTADO_K1_COLADO
+    const k2Colado     = !!(r.bomba_estado_bitmask & 32);  // 2026-08-09 -- ESTADO_K2_COLADO
     const haAutoteste  = haTempo(r.ultimo_autoteste_at);
     if (releColado) {
-        elAutoteste.textContent = 'Auto-teste: FALHOU' + (haAutoteste ? ' · ' + haAutoteste : '');
+        // 2026-08-09 -- qual relé especificamente, quando o teste conseguiu isolar (pedido
+        // de Peter) -- se os dois bits vierem juntos (pré-checagem não isolou), mostra os dois.
+        const qual = (k1Colado && k2Colado) ? ' (K1 e K2)' : k1Colado ? ' (K1)' : k2Colado ? ' (K2)' : '';
+        elAutoteste.textContent = 'Auto-teste: FALHOU' + qual + (haAutoteste ? ' · ' + haAutoteste : '');
         elAutoteste.style.color = 'var(--err)';
     } else if (haAutoteste) {
         elAutoteste.textContent = 'Auto-teste: OK · ' + haAutoteste;

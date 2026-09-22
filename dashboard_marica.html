@@ -79,7 +79,7 @@ body { background: var(--bg); color: var(--txt); font-family: var(--sans); font-
 main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 
 /* ---- bloco principal ---- */
-.cards { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 12px; margin-bottom: 12px; }
+.cards { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; margin-bottom: 12px; }
 .card { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 16px 18px; transition: border-color .3s; }
 .card-label { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: var(--txt2); text-transform: uppercase; margin-bottom: 12px; }
 .card-val   { font-family: var(--mono); font-size: 26px; font-weight: 500; line-height: 1; }
@@ -215,6 +215,7 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
 .btn-csv svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; }
 
 @media (max-width: 900px) {
+    .cards { grid-template-columns: repeat(2, minmax(0,1fr)); }
     .pzem-cards { grid-template-columns: repeat(3, minmax(0,1fr)); }
 }
 @media (max-width: 700px) {
@@ -263,7 +264,7 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
 
 <main>
 
-    <!-- Bloco principal: nível, bomba, celular, rssi -->
+    <!-- Bloco principal: nível, bomba, tempo até cheia, wi-fi -->
     <div class="cards">
         <div class="card" id="card-nivel-box">
             <div class="card-label">Nível de água</div>
@@ -283,6 +284,11 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
             <!-- Prova de vida do auto-teste de relé (marica-213) -- sempre visível,
                  não só quando falha, pra confirmar que a checagem de segurança está ativa -->
             <div class="card-sub" id="card-autoteste" style="margin-top:4px;">—</div>
+        </div>
+        <div class="card">
+            <div class="card-label">Tempo até cheia (30cm)</div>
+            <div class="card-val c-off" id="card-tempo-cheia" style="font-size:22px;padding-top:4px;">—</div>
+            <div class="card-sub" id="card-tempo-cheia-sub">—</div>
         </div>
         <div class="card">
             <div class="card-label">Wi-Fi Controle</div>
@@ -441,6 +447,12 @@ let ultimoBombaOffline = false;
 let autoTimer    = null;
 let erroAckAssinatura = JSON.parse(localStorage.getItem('erro_ack_sig') || 'null');
 
+// Vazão real de enchimento (cm/min de distância reduzida), calibrada a partir
+// de sessões reais da bomba (pzem_w_medio>300, i.e. carga real, não só relé
+// armado). Usada pelo card "Tempo até cheia". null até a primeira calibração
+// carregar (carregarVazaoReal()); o card mostra fallback enquanto isso.
+let taxaEnchimentoCmMin = null;
+
 // -------------------------------------------------------------
 // TRADUÇÃO DE CÓDIGOS DE ERRO/ESTADO — 2026-07-25
 // -------------------------------------------------------------
@@ -580,6 +592,20 @@ function formatDuracao(s) {
     return `${ss}s`;
 }
 
+// Formata minutos (fracionários) como "Xh Ymin" / "Y min" / "<1 min" -- usado
+// pelo card "Tempo até cheia". Diferente de formatDuracao() (que recebe
+// segundos inteiros de sessões já concluídas), este recebe uma ESTIMATIVA
+// em minutos fracionários (distância restante ÷ vazão calibrada).
+function formatMinutosEstimativa(min) {
+    if (min === null || min === undefined || !isFinite(min)) return '—';
+    if (min < 1) return '< 1 min';
+    const totalMin = Math.round(min);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    if (h > 0) return `${h}h ${m}min`;
+    return `${m} min`;
+}
+
 // 2026-08-06 -- "há Xh"/"há Xmin" a partir de um timestamp ISO8601 (ex: ultimo_autoteste_at)
 function haTempo(isoString) {
     if (!isoString) return null;
@@ -710,6 +736,32 @@ async function fetchSupabase(tabela, params) {
     return { data, total };
 }
 
+// Calibra a vazão real de enchimento (cm/min) a partir de TODAS as sessões
+// reais já registradas (não limitado ao filtro de período da tela) -- pedido
+// de Peter: mais amostras = estimativa mais estável. Filtra por carga real
+// do PZEM (pzem_w_medio>300, distingue de relé armado sem bombear de fato,
+// ver marica-303) e por variação de nível plausível (evita outliers/leituras
+// erradas contaminando a mediana). Usa MEDIANA em vez de média -- robusta a
+// qualquer sessão anômala isolada que passe pelo filtro.
+async function carregarVazaoReal() {
+    try {
+        const { data } = await fetchSupabase('sessoes_marica_publica',
+            'pzem_w_medio=gt.300&duracao_s=gt.60&variacao_cm=lt.-3&variacao_cm=gt.-60&order=inicio.desc&limit=200');
+        const taxas = (data || [])
+            .map(s => (-s.variacao_cm) / (s.duracao_s / 60))
+            .filter(t => isFinite(t) && t > 0)
+            .sort((a, b) => a - b);
+        if (taxas.length > 0) {
+            const meio = Math.floor(taxas.length / 2);
+            taxaEnchimentoCmMin = taxas.length % 2 !== 0
+                ? taxas[meio]
+                : (taxas[meio - 1] + taxas[meio]) / 2;
+        }
+    } catch (e) {
+        // mantém o valor anterior (ou null) -- card mostra fallback nesse caso
+    }
+}
+
 function reconhecerErro() {
     if (!dadosTel.length) return;
     const ultimo = ordem === 'desc' ? dadosTel[0] : dadosTel[dadosTel.length-1];
@@ -746,6 +798,43 @@ function atualizarBlocoPzem(r) {
 
     badge.style.display  = 'inline';
     badge.textContent    = r.bomba_ligada ? 'ao vivo' : 'standby · a cada 2min';
+}
+
+// Card "Tempo até cheia (30cm)" -- estimativa sempre visível (mesmo com a
+// bomba desligada, pedido de Peter: "se eu ligar agora"), calculada a partir
+// do nível atual e da vazão real calibrada em carregarVazaoReal(). Distância
+// (não %) porque nivel_cm é a métrica que a vazão real (cm/min) usa direto.
+function atualizarCardTempoCheia(r) {
+    const el    = document.getElementById('card-tempo-cheia');
+    const elSub = document.getElementById('card-tempo-cheia-sub');
+
+    if (!nivelDisponivel(r)) {
+        el.textContent  = '—';
+        el.className    = 'card-val c-off';
+        elSub.textContent = 'Nível indisponível';
+        return;
+    }
+
+    if (r.nivel_cm <= CAIXA_CHEIA_CM) {
+        el.textContent  = 'Cheia';
+        el.className    = 'card-val c-ok';
+        elSub.textContent = `${r.nivel_cm.toFixed(1)} cm (referência: ${CAIXA_CHEIA_CM} cm)`;
+        return;
+    }
+
+    if (!taxaEnchimentoCmMin) {
+        el.textContent  = '—';
+        el.className    = 'card-val c-off';
+        elSub.textContent = 'Vazão ainda não calibrada';
+        return;
+    }
+
+    const distanciaRestante  = r.nivel_cm - CAIXA_CHEIA_CM;
+    const minutosRestantes   = distanciaRestante / taxaEnchimentoCmMin;
+    el.textContent  = formatMinutosEstimativa(minutosRestantes);
+    el.className    = 'card-val c-blue';
+    elSub.textContent = (r.bomba_ligada ? 'Bomba ligada · ' : 'Estimativa se ligar agora · ')
+        + `vazão real ${taxaEnchimentoCmMin.toFixed(2)} cm/min`;
 }
 
 function atualizarCards(r) {
@@ -803,6 +892,8 @@ function atualizarCards(r) {
         elAutoteste.textContent = 'Auto-teste: —';
         elAutoteste.style.color = 'var(--txt3)';
     }
+
+    atualizarCardTempoCheia(r);
 
     const rssi = r.wifi_rssi;
     const elR  = document.getElementById('card-rssi');
@@ -1130,7 +1221,11 @@ function setTab(t, el) {
     document.getElementById('panel-' + t).classList.add('active');
 }
 
-function atualizarDados() { carregarTelemetria(); carregarSessoes(); }
+// carregarVazaoReal() roda em paralelo, uma vez por refresh -- é uma calibração
+// (todas as sessões históricas), não dado do período selecionado na tela, então
+// fica fora do par carregarTelemetria()/carregarSessoes() só por clareza de
+// intenção; taxaEnchimentoCmMin já fica pronta antes do próximo atualizarCards().
+function atualizarDados() { carregarTelemetria(); carregarSessoes(); carregarVazaoReal(); }
 
 atualizarRelogio();
 setInterval(atualizarRelogio, 1000);

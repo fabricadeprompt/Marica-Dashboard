@@ -428,7 +428,7 @@ const SUPABASE_URL = 'https://dgnjyzyalnrxpvnyahfd.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_ST1iCvU8hUc-wl19RQIV_g_8FfxXNEH';
 
 const CAIXA_CHEIA_CM       = 30;
-const CAIXA_VAZIA_CM       = 70;
+const CAIXA_VAZIA_CM       = 60;   // 2026-10-25 -- escala da Água v3.x: cheia 30, meia 45, vazia 60
 const STALE_MS             = 15 * 60 * 1000;
 
 let periodo      = '7d';
@@ -458,12 +458,15 @@ let taxaEnchimentoCmMin = null;
 // -------------------------------------------------------------
 // motivo_status da Água (MotivoStatusAgua em marica_protocol.h) -- detalha
 // a causa de agua_erro_sensor, que antes era só um booleano genérico.
+// 2026-10-25 -- Água v3.x só envia 0, 2 e 3. Os códigos 1, 4 e 5 ficam só
+// para exibir o histórico anterior a 2026-10-21.
 const MOTIVO_AGUA = {
-    0: { label: 'Normal',                  cls: 'b-ok'   },
-    1: { label: 'Compensando condensação', cls: 'b-blue' },
-    2: { label: 'Sensor sem eco',          cls: 'b-err'  },
-    3: { label: 'Condensação persistente', cls: 'b-err'  },
-    4: { label: 'Instabilidade no sensor', cls: 'b-err'  },
+    0: { label: 'Normal',                              cls: 'b-ok'   },
+    1: { label: 'Compensando condensação (histórico)', cls: 'b-blue' },
+    2: { label: 'Erro de leitura',                     cls: 'b-err'  },
+    3: { label: 'Leitura travada (umidade)',           cls: 'b-err'  },
+    4: { label: 'Instabilidade (histórico)',           cls: 'b-err'  },
+    5: { label: 'Aceito pós-boot (histórico)',         cls: 'b-blue' },
 };
 
 function motivoAguaInfo(m) {
@@ -478,13 +481,17 @@ function motivoAguaBadge(m) {
 // bomba_estado_bitmask (BitmaskEstadoBomba) -- estados operacionais da Bomba,
 // SEPARADO de erros_ativos de propósito (ver marica_protocol.h). Não são
 // "erros" no mesmo sentido -- quarentena é normal por 5min após todo boot.
+// 2026-10-25 -- Bomba v2.x não envia mais os bits 1, 2, 4 e 64 (sempre 0); ficam
+// só para exibir o histórico anterior a 2026-10-21, sem alarme. Bit 128 é novo.
 const ESTADO_BOMBA_BITS = [
-    { bit: 1, label: 'Quarentena pós-boot',              alarme: false },
-    { bit: 2, label: 'Bloqueio temporário',               alarme: false },
-    { bit: 4, label: 'Modo forçado — requer reset manual', alarme: true  },
+    { bit: 1, label: 'Quarentena pós-boot (histórico)',   alarme: false },
+    { bit: 2, label: 'Bloqueio temporário (histórico)',   alarme: false },
+    { bit: 4, label: 'Modo forçado (histórico)',          alarme: false },
     { bit: 8, label: 'Relé colado — requer troca da placa', alarme: true  },  // 2026-08-06 -- ESTADO_RELE_COLADO
     { bit: 16, label: 'K1 colado — requer troca da placa', alarme: true },   // 2026-08-09 -- ESTADO_K1_COLADO
     { bit: 32, label: 'K2 colado — requer troca da placa', alarme: true },   // 2026-08-09 -- ESTADO_K2_COLADO
+    { bit: 64, label: 'Nível suspeito (histórico)',        alarme: false },
+    { bit: 128, label: 'Comando de ligar ignorado',        alarme: false },  // 2026-10-21 -- ESTADO_LIGA_IGNORADO (Bomba v2.0)
 ];
 
 function estadoBombaAtivos(bitmask) {
@@ -501,16 +508,20 @@ function estadoBombaAtivos(bitmask) {
 // (não é badge de erro); os demais são badges informativos/warn/err conforme
 // a gravidade -- nenhum deles sobe pro alarme sozinho (isso já é feito por
 // r.erros_ativos/r.ladrao_ativo/etc, que refletem o estado ATUAL, não histórico).
+// 2026-10-25 -- 9 e 10 são da Bomba v2.1/v2.3. 2, 3 e 7 não são mais enviados
+// (histórico). 0 também é o valor depois de um reinício da Bomba, sem desligamento.
 const CAUSA_DESLIGA_BOMBA = {
-    0: { label: 'Manual',                cls: 'b-off'  },
-    1: { label: 'Nível cheio',           cls: 'b-ok'   },
-    2: { label: 'Segurança excedida',    cls: 'b-err'  },
-    3: { label: 'Nível zero (2min)',     cls: 'b-err'  },
-    4: { label: 'Silêncio da Água',      cls: 'b-warn' },
-    5: { label: 'Timeout de operação',   cls: 'b-err'  },
-    6: { label: 'Ladrão (transbordo)',   cls: 'b-err'  },
-    7: { label: 'Erro físico',           cls: 'b-err'  },
-    8: { label: 'OTA',                   cls: 'b-off'  },
+    0: { label: 'Manual ou reinício',          cls: 'b-off'  },
+    1: { label: 'Nível cheio',                 cls: 'b-ok'   },
+    2: { label: 'Segurança excedida (histórico)', cls: 'b-err' },
+    3: { label: 'Nível zero (histórico)',      cls: 'b-err'  },
+    4: { label: 'Silêncio da Água',            cls: 'b-warn' },
+    5: { label: 'Timeout de operação',         cls: 'b-err'  },
+    6: { label: 'Ladrão (transbordo)',         cls: 'b-err'  },
+    7: { label: 'Erro físico (histórico)',     cls: 'b-err'  },
+    8: { label: 'OTA',                         cls: 'b-off'  },
+    9: { label: 'Nível não sobe',              cls: 'b-err'  },
+    10: { label: 'Tempo esperado esgotado',    cls: 'b-warn' },
 };
 
 function causaDesligamentoInfo(m) {
@@ -650,10 +661,12 @@ function eventosLabel(r) {
     return unicos.map(x => `<span class="badge ${x.cls}" style="margin-right:2px;">${x.label}</span>`).join('');
 }
 
+// 2026-10-25 -- modo forçado (bit 4) saiu: a Bomba v2.x não o envia mais.
+// Relé colado (bits 8/16/32) passa a contar como erro, como já acontecia no banner.
 function temErro(r) {
-    const modoForcado = !!(r.bomba_estado_bitmask & 4);
+    const releColado = !!(r.bomba_estado_bitmask & 8);
     return (r.erros_ativos && r.erros_ativos !== 0) || r.erro_sensor || r.ladrao_ativo ||
-           r.bomba_offline || r.agua_offline || modoForcado;
+           r.bomba_offline || r.agua_offline || releColado;
 }
 
 function pfLabel(pf) {
@@ -797,7 +810,7 @@ function atualizarBlocoPzem(r) {
             ? `${r.pzem_kwh.toFixed(2)}<span class="pzem-card-unit">kWh</span>` : '—';
 
     badge.style.display  = 'inline';
-    badge.textContent    = r.bomba_ligada ? 'ao vivo' : 'standby · a cada 2min';
+    badge.textContent    = r.bomba_ligada ? 'ao vivo' : 'standby · a cada 1min';
 }
 
 // Card "Tempo até cheia (30cm)" -- estimativa sempre visível (mesmo com a
@@ -933,8 +946,8 @@ function atualizarCards(r) {
             msgs.push('Sensor da Água: ' + motivoAguaInfo(r.agua_motivo_status).label);
         }
         if (r.ladrao_ativo)      msgs.push('Ladrão ativo');
-        // Só modo_forcado sobe pro alarme -- quarentena/bloqueio são estados
-        // temporários esperados, não precisam de alarme vermelho.
+        // Só relé colado (bits 8/16/32) sobe pro alarme -- os demais estados
+        // são informativos ou histórico.
         estadoBombaAtivos(r.bomba_estado_bitmask).forEach(e => { if (e.alarme) msgs.push(e.label); });
         document.getElementById('alarm-text').textContent = '⚠ FALHA: ' + [...new Set(msgs)].join(' | ');
         banner.classList.add('visible');

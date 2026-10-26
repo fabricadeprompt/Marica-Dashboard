@@ -271,6 +271,9 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
             <div class="card-val c-ok" id="card-nivel">—</div>
             <div class="nivel-bar-wrap"><div class="nivel-bar" id="nivel-bar" style="width:0%;background:var(--accent);"></div></div>
             <div class="card-sub" id="card-nivel-cm">— cm</div>
+            <!-- 2026-10-26 -- saúde do sensor: há quanto tempo o valor não muda + erros do dia.
+                 Leitura variando = sensor saudável; valor parado = suspeita (descarte/eco duplo). -->
+            <div class="card-sub" id="card-saude" style="margin-top:4px;">—</div>
             <!-- Badge de condensação: visível quando agua_erro_sensor=true (modo_reflexao sem compensação, marica-097) -->
             <div class="badge-condensacao" id="badge-condensacao">
                 <svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 1 7 7c0 4-3 7-7 11C9 16 5 13 5 9a7 7 0 0 1 7-7z"/></svg>
@@ -327,10 +330,12 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
     <!-- Gráfico de nível -->
     <div class="chart-box">
         <div class="chart-header">
-            <span class="chart-title">Nível do reservatório</span>
+            <span class="chart-title">Nível do reservatório · cm, mediana a cada 15 min</span>
             <div class="legend">
-                <div class="leg"><div class="leg-line" style="background:var(--accent);"></div>Nível (%)</div>
-                <div class="leg"><div class="leg-line" style="background:var(--blue);"></div>Bomba ligada</div>
+                <div class="leg"><div class="leg-line" style="background:var(--accent);"></div>Nível</div>
+                <div class="leg"><div class="leg-line" style="background:rgba(0,200,150,.25);height:8px;"></div>Mín–máx</div>
+                <div class="leg"><div class="leg-line" style="background:rgba(0,112,243,.35);height:8px;"></div>Bomba ligada</div>
+                <div class="leg"><div class="leg-dot" style="background:var(--err);"></div>Erro do sensor</div>
             </div>
         </div>
         <div class="chart-wrap"><canvas id="chart-nivel"></canvas></div>
@@ -429,6 +434,8 @@ const SUPABASE_KEY = 'sb_publishable_ST1iCvU8hUc-wl19RQIV_g_8FfxXNEH';
 
 const CAIXA_CHEIA_CM       = 30;
 const CAIXA_VAZIA_CM       = 60;   // 2026-10-25 -- escala da Água v3.x: cheia 30, meia 45, vazia 60
+const CAIXA_METADE_CM      = 45;
+const LADRAO_CM            = 20;   // transbordo pelo ladrão (marica-346)
 const STALE_MS             = 15 * 60 * 1000;
 
 let periodo      = '7d';
@@ -441,6 +448,8 @@ let filtroAoVivo = true;  // true = só linhas com wifi_rssi (envio ao vivo); es
 let tabAtiva     = 'telemetria';
 let dadosTel     = [];
 let dadosSes     = [];
+let dadosGraf    = [];    // 2026-10-26 -- gráfico agregado (view telemetria_marica_grafico, 15 min)
+let ultimoRegistro = null; // 2026-10-26 -- registro mais recente, independente de período/ordem da tabela
 let chartInst    = null;
 let ultimoPacote = null;
 let ultimoBombaOffline = false;
@@ -726,10 +735,17 @@ function configurarAutoRefresh() {
 }
 document.getElementById('chk-auto').addEventListener('change', configurarAutoRefresh);
 
+// 2026-10-26 -- meia-noite de hoje no fuso do sistema (Brasília, UTC-3 fixo, sem horário de verão)
+function inicioDoDiaBrasilia() {
+    const p = new Intl.DateTimeFormat('en-CA', { timeZone: FUSO_SISTEMA, year: 'numeric', month: '2-digit', day: '2-digit' })
+        .formatToParts(new Date()).reduce((acc, x) => { acc[x.type] = x.value; return acc; }, {});
+    return `${p.year}-${p.month}-${p.day}T00:00:00-03:00`;
+}
+
 function calcularIntervalo() {
     const fim = new Date().toISOString();
-    const ini = new Date();
-    if      (periodo === 'hoje') ini.setHours(0,0,0,0);
+    let ini = new Date();
+    if      (periodo === 'hoje') ini = new Date(inicioDoDiaBrasilia());
     else if (periodo === '7d')   ini.setDate(ini.getDate()-7);
     else if (periodo === '30d')  ini.setDate(ini.getDate()-30);
     return { ini: ini.toISOString(), fim };
@@ -776,9 +792,8 @@ async function carregarVazaoReal() {
 }
 
 function reconhecerErro() {
-    if (!dadosTel.length) return;
-    const ultimo = ordem === 'desc' ? dadosTel[0] : dadosTel[dadosTel.length-1];
-    if (ultimo) salvarAck(calcularAssinatura(ultimo));
+    if (!ultimoRegistro) return;
+    salvarAck(calcularAssinatura(ultimoRegistro));
     document.getElementById('alarm-banner').classList.remove('visible');
     renderTelemetria();
 }
@@ -831,7 +846,10 @@ function atualizarCardTempoCheia(r) {
     if (r.nivel_cm <= CAIXA_CHEIA_CM) {
         el.textContent  = 'Cheia';
         el.className    = 'card-val c-ok';
-        elSub.textContent = `${r.nivel_cm.toFixed(1)} cm (referência: ${CAIXA_CHEIA_CM} cm)`;
+        // 2026-10-26 -- com a caixa cheia, mostra quanto leva para encher a partir da metade (45cm)
+        elSub.textContent = taxaEnchimentoCmMin
+            ? `De 45 cm leva ~${formatMinutosEstimativa((CAIXA_METADE_CM - CAIXA_CHEIA_CM) / taxaEnchimentoCmMin)} · vazão ${taxaEnchimentoCmMin.toFixed(2)} cm/min`
+            : `${r.nivel_cm.toFixed(1)} cm (referência: ${CAIXA_CHEIA_CM} cm)`;
         return;
     }
 
@@ -965,17 +983,9 @@ async function carregarTelemetria() {
             `created_at=gte.${ini}&created_at=lte.${fim}${filtroExtra}&order=${ord}&limit=1000`);
         dadosTel = data || [];
         renderTelemetria();
-        if (dadosTel.length > 0) {
-            const ultimo = ordem === 'desc' ? dadosTel[0] : dadosTel[dadosTel.length-1];
-            atualizarCards(ultimo);
-            ultimoPacote = ultimo.created_at;
-            ultimoBombaOffline = !!ultimo.bomba_offline;
-            document.getElementById('last-update-label').textContent = ultimoBombaOffline
-                ? 'Último pacote: ' + formatISO(ultimoPacote) + ' · sem comunicação com a Bomba'
-                : 'Último pacote: ' + formatISO(ultimoPacote);
-        }
-        renderGrafico();
-        atualizarStatusDot();
+        // 2026-10-26 -- cards e gráfico saíram daqui: com "Mais antigo" (ordem asc) e limite
+        // de 1000 linhas, o "último" registro era o mais ANTIGO do período, e o gráfico cobria
+        // só as ~16h mais recentes. Agora: carregarRecentes() (cards) e carregarGrafico().
         const t = total.split('/')[1] || dadosTel.length;
         document.getElementById('tbl-info-tel').textContent = filtroAoVivo
             ? `${dadosTel.length} de ${t} registros · buffer de resiliência oculto`
@@ -1088,95 +1098,206 @@ function renderSessoes() {
     }).join('');
 }
 
+// -------------------------------------------------------------
+// 2026-10-26 -- REGISTRO MAIS RECENTE + SAÚDE DO SENSOR
+// -------------------------------------------------------------
+// Os cards não dependem mais da tabela (período/ordem/limite): busca as últimas
+// 240 linhas (~4h) só para eles e para medir há quanto tempo o valor não muda.
+// Princípio de Peter (marica-362): leitura variando = sensor saudável; valor
+// parado = suspeita (descarte por eco duplo na v3.1, marica-351/356).
+async function carregarRecentes() {
+    try {
+        const [rec, hoje] = await Promise.all([
+            fetchSupabase('telemetria_marica_publica', 'order=created_at.desc&limit=240'),
+            fetchSupabase('telemetria_marica_publica',
+                `select=created_at,erro_sensor,agua_offline&created_at=gte.${encodeURIComponent(inicioDoDiaBrasilia())}&order=created_at.asc&limit=2000`)
+        ]);
+        const linhas = rec.data || [];
+        if (!linhas.length) return;
+        ultimoRegistro = linhas[0];
+        atualizarCards(ultimoRegistro);
+        atualizarSaudeSensor(linhas, hoje.data || []);
+        ultimoPacote = ultimoRegistro.created_at;
+        ultimoBombaOffline = !!ultimoRegistro.bomba_offline;
+        document.getElementById('last-update-label').textContent = ultimoBombaOffline
+            ? 'Último pacote: ' + formatISO(ultimoPacote) + ' · sem comunicação com a Bomba'
+            : 'Último pacote: ' + formatISO(ultimoPacote);
+        atualizarStatusDot();
+    } catch (e) {
+        // mantém os cards como estão; o status-dot acusa dado velho sozinho
+    }
+}
+
+function formatMinutos(ms) {
+    const min = Math.floor(ms / 60000);
+    if (min < 1) return '< 1 min';
+    if (min < 60) return min + ' min';
+    return Math.floor(min / 60) + 'h ' + (min % 60) + 'min';
+}
+
+// linhas: mais recente primeiro. hoje: linhas do dia (asc), só erro_sensor/agua_offline.
+function atualizarSaudeSensor(linhas, hoje) {
+    const el = document.getElementById('card-saude');
+    const r  = linhas[0];
+
+    // episódios de erro de leitura hoje (transições sem erro -> com erro)
+    let episodios = 0, anterior = false;
+    hoje.forEach(h => { const e = !!h.erro_sensor && !h.agua_offline; if (e && !anterior) episodios++; anterior = e; });
+    const txtErros = episodios === 0 ? 'sem erros hoje' : (episodios === 1 ? '1 erro hoje' : episodios + ' erros hoje');
+
+    if (r.agua_offline || r.bomba_offline) {
+        el.textContent = 'Saúde do sensor: sem comunicação · ' + txtErros;
+        el.style.color = 'var(--txt3)';
+        return;
+    }
+    if (r.erro_sensor) {
+        let i = 0;
+        while (i + 1 < linhas.length && linhas[i + 1].erro_sensor) i++;
+        el.textContent = 'Sensor em erro há ' + formatMinutos(new Date(r.created_at) - new Date(linhas[i].created_at))
+            + (i + 1 >= linhas.length ? '+' : '') + ' · ' + txtErros;
+        el.style.color = 'var(--err)';
+        return;
+    }
+
+    // há quanto tempo o valor publicado não muda
+    let i = 0;
+    while (i + 1 < linhas.length && nivelDisponivel(linhas[i + 1]) && linhas[i + 1].nivel_cm === r.nivel_cm) i++;
+    const parado = new Date(r.created_at) - new Date(linhas[i].created_at);
+    const maisDe = (i + 1 >= linhas.length) ? '+' : '';
+    if (parado >= 60 * 60000) {
+        el.textContent = 'Valor parado há ' + formatMinutos(parado) + maisDe + ' · ' + txtErros;
+        el.style.color = 'var(--err)';
+    } else if (parado >= 10 * 60000) {
+        el.textContent = 'Valor parado há ' + formatMinutos(parado) + maisDe + ' · ' + txtErros;
+        el.style.color = 'var(--warn)';
+    } else {
+        el.textContent = 'Leitura variando · ' + txtErros;
+        el.style.color = 'var(--txt3)';
+    }
+}
+
+// -------------------------------------------------------------
+// 2026-10-26 -- GRÁFICO AGREGADO (view telemetria_marica_grafico)
+// -------------------------------------------------------------
+// Antes o gráfico usava as linhas da tabela (limite 1000): "7 dias" mostrava só
+// ~16h. Agora usa a mediana/mín/máx a cada 15 min, calculada no Supabase, só com
+// leituras válidas. Em cm, eixo invertido (mais água = mais alto), referências reais.
+async function carregarGrafico() {
+    const { ini, fim } = calcularIntervalo();
+    try {
+        const { data } = await fetchSupabase('telemetria_marica_grafico',
+            `bucket=gte.${encodeURIComponent(ini)}&bucket=lte.${encodeURIComponent(fim)}&order=bucket.asc&limit=3000`);
+        dadosGraf = data || [];
+        renderGrafico();
+    } catch (e) {
+        // mantém o gráfico anterior
+    }
+}
+
+const linhasReferencia = {
+    id: 'linhasReferencia',
+    afterDraw(chart) {
+        const { ctx, chartArea: { left, right }, scales: { y } } = chart;
+        const linha = (cm, cor, rotulo) => {
+            const yPx = y.getPixelForValue(cm);
+            ctx.save();
+            ctx.setLineDash([4,4]);
+            ctx.strokeStyle = cor; ctx.lineWidth = 1; ctx.globalAlpha = 0.45;
+            ctx.beginPath(); ctx.moveTo(left, yPx); ctx.lineTo(right, yPx); ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.globalAlpha = 0.75; ctx.fillStyle = cor; ctx.font = '9px IBM Plex Mono';
+            ctx.fillText(rotulo, left + 4, yPx - 3);
+            ctx.restore();
+        };
+        linha(LADRAO_CM,       '#e53e3e', `LADRÃO ${LADRAO_CM} cm`);
+        linha(CAIXA_CHEIA_CM,  '#00c896', `CHEIA ${CAIXA_CHEIA_CM} cm`);
+        linha(CAIXA_METADE_CM, '#718096', `METADE ${CAIXA_METADE_CM} cm`);
+        linha(CAIXA_VAZIA_CM,  '#f5a623', `VAZIA ${CAIXA_VAZIA_CM} cm`);
+    }
+};
+
 function renderGrafico() {
-    const canvas = document.getElementById('chart-nivel');
-    const ctx    = canvas.getContext('2d');
-    const sorted = [...dadosTel].sort((a,b) => new Date(a.created_at) - new Date(b.created_at));
-    const labels = sorted.map(r => formatISO(r.created_at).slice(5,16));
-    const niveis = sorted.map(r => nivelDisponivel(r) ? nivelPct(r.nivel_cm) : null);
+    const ctx = document.getElementById('chart-nivel').getContext('2d');
+    const g   = dadosGraf;
+    const num = v => (v === null || v === undefined) ? null : Number(v);
+    const labels = g.map(b => {
+        const s = formatISO(b.bucket);                       // AAAA-MM-DD HH:MM:SS
+        return periodo === 'hoje' ? s.slice(11,16) : `${s.slice(8,10)}/${s.slice(5,7)} ${s.slice(11,16)}`;
+    });
+    const mediana = g.map(b => num(b.nivel_mediana));
+    const minimo  = g.map(b => num(b.nivel_min));
+    const maximo  = g.map(b => num(b.nivel_max));
+    const erros   = g.map(b => b.n_erro > 0 ? 16 : null);   // marca vermelha no topo
 
     if (chartInst) chartInst.destroy();
 
-    const bgPlugin = {
-        id: 'bgBomba',
+    const fundoBomba = {
+        id: 'fundoBomba',
         beforeDraw(chart) {
             const { ctx, chartArea: { top, bottom }, scales: { x } } = chart;
-            sorted.forEach((r, i) => {
-                if (!r.bomba_ligada) return;
-                const x0 = i > 0               ? x.getPixelForValue(i-1) : x.getPixelForValue(i);
-                const x1 = i < sorted.length-1  ? x.getPixelForValue(i+1) : x.getPixelForValue(i);
-                ctx.fillStyle = 'rgba(0,112,243,0.07)';
-                ctx.fillRect(x0, top, x1 - x0, bottom - top);
+            g.forEach((b, i) => {
+                if (!b.bomba_ligada) return;
+                const x0 = x.getPixelForValue(Math.max(i - 0.5, 0));
+                const x1 = x.getPixelForValue(Math.min(i + 0.5, g.length - 1));
+                ctx.fillStyle = 'rgba(0,112,243,0.18)';
+                ctx.fillRect(x0, top, Math.max(x1 - x0, 2), bottom - top);
             });
         }
     };
 
     chartInst = new Chart(ctx, {
         type: 'line',
-        plugins: [bgPlugin],
+        plugins: [fundoBomba, linhasReferencia],
         data: {
             labels,
-            datasets: [{
-                data: niveis,
-                borderColor: '#00c896',
-                borderWidth: 2,
-                pointRadius: 0,
-                tension: 0.3,
-                fill: true,
-                backgroundColor: 'rgba(0,200,150,0.04)'
-            }]
+            datasets: [
+                { label: 'máx', data: maximo, borderWidth: 0, pointRadius: 0, fill: '+1',
+                  backgroundColor: 'rgba(0,200,150,0.14)', spanGaps: false },
+                { label: 'mín', data: minimo, borderWidth: 0, pointRadius: 0, fill: false, spanGaps: false },
+                { label: 'Nível', data: mediana, borderColor: '#00c896', borderWidth: 2, pointRadius: 0,
+                  tension: 0, fill: false, spanGaps: false },
+                { label: 'Erro', data: erros, showLine: false, pointRadius: 3, pointHoverRadius: 4,
+                  pointBackgroundColor: '#e53e3e', pointBorderWidth: 0 }
+            ]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            animation: false,
+            interaction: { mode: 'index', intersect: false },
             plugins: {
                 legend: { display: false },
                 tooltip: {
-                    backgroundColor: '#13161d',
-                    borderColor: '#1e2230',
-                    borderWidth: 1,
-                    titleColor: '#718096',
-                    bodyColor: '#e2e8f0',
+                    backgroundColor: '#13161d', borderColor: '#1e2230', borderWidth: 1,
+                    titleColor: '#718096', bodyColor: '#e2e8f0',
                     titleFont: { family: 'IBM Plex Mono', size: 10 },
                     bodyFont:  { family: 'IBM Plex Mono', size: 12 },
-                    callbacks: { label: ctx => ctx.parsed.y !== null ? ctx.parsed.y + '%' : 'sem leitura' }
+                    filter: item => item.datasetIndex >= 2,
+                    callbacks: {
+                        label: item => {
+                            const b = g[item.dataIndex];
+                            if (item.datasetIndex === 3) return `Erro do sensor: ${b.n_erro} de ${b.n} leituras`;
+                            if (b.nivel_mediana === null) return 'Sem leitura válida';
+                            return `${num(b.nivel_mediana).toFixed(1)} cm (mín ${num(b.nivel_min).toFixed(1)} · máx ${num(b.nivel_max).toFixed(1)})`
+                                + (b.bomba_ligada ? ' · bomba ligada' : '');
+                        }
+                    }
                 }
             },
             scales: {
                 x: {
-                    ticks: { color: '#4a5568', font: { family: 'IBM Plex Mono', size: 9 }, maxTicksLimit: 8, maxRotation: 0 },
+                    // rótulo curto no eixo (HH:MM em "hoje", DD/MM nos demais); o tooltip mostra data e hora
+                    ticks: { color: '#4a5568', font: { family: 'IBM Plex Mono', size: 9 }, maxTicksLimit: 7, maxRotation: 0,
+                             autoSkipPadding: 12,
+                             callback: (v, i) => periodo === 'hoje' ? labels[i] : labels[i].slice(0, 5) },
                     grid:  { color: '#1e2230', lineWidth: 0.5 }
                 },
                 y: {
-                    min: 0, max: 105,
-                    ticks: { color: '#4a5568', font: { family: 'IBM Plex Mono', size: 9 }, callback: v => v + '%' },
+                    reverse: true, min: 15, max: 70,
+                    ticks: { color: '#4a5568', font: { family: 'IBM Plex Mono', size: 9 }, stepSize: 5, callback: v => v + ' cm' },
                     grid:  { color: '#1e2230', lineWidth: 0.5 }
                 }
             }
-        }
-    });
-
-    Chart.register({
-        id: 'thresholds',
-        afterDraw(chart) {
-            const { ctx, chartArea: { left, right }, scales: { y } } = chart;
-            const drawLine = (pct, color, label) => {
-                const yPx = y.getPixelForValue(pct);
-                ctx.save();
-                ctx.setLineDash([4,4]);
-                ctx.strokeStyle = color;
-                ctx.lineWidth   = 1;
-                ctx.globalAlpha = 0.4;
-                ctx.beginPath(); ctx.moveTo(left, yPx); ctx.lineTo(right, yPx); ctx.stroke();
-                ctx.setLineDash([]);
-                ctx.globalAlpha = 0.6;
-                ctx.fillStyle = color;
-                ctx.font = '9px IBM Plex Mono';
-                ctx.fillText(label, right - 65, yPx - 3);
-                ctx.restore();
-            };
-            drawLine(100, '#e53e3e', 'TRANSBORDO');
-            drawLine(10,  '#f5a623', 'CAVITAÇÃO');
         }
     });
 }
@@ -1238,7 +1359,7 @@ function setTab(t, el) {
 // (todas as sessões históricas), não dado do período selecionado na tela, então
 // fica fora do par carregarTelemetria()/carregarSessoes() só por clareza de
 // intenção; taxaEnchimentoCmMin já fica pronta antes do próximo atualizarCards().
-function atualizarDados() { carregarTelemetria(); carregarSessoes(); carregarVazaoReal(); }
+function atualizarDados() { carregarRecentes(); carregarGrafico(); carregarTelemetria(); carregarSessoes(); carregarVazaoReal(); }
 
 atualizarRelogio();
 setInterval(atualizarRelogio, 1000);

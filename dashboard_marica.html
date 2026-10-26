@@ -137,6 +137,10 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 .pzem-card-val   { font-family: var(--mono); font-size: 22px; font-weight: 500; line-height: 1; color: var(--txt); }
 .pzem-card-unit  { font-family: var(--mono); font-size: 12px; color: var(--txt2); margin-left: 2px; }
 .pzem-card-sub   { font-family: var(--mono); font-size: 10px; color: var(--txt3); margin-top: 5px; }
+.energia-box     { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 14px 16px; margin-top: 10px; }
+.energia-resumo  { font-family: var(--mono); font-size: 12px; color: var(--txt2); margin-bottom: 10px; }
+.energia-wrap    { width: 100%; height: 150px; position: relative; }
+.energia-wrap canvas { width: 100% !important; height: 100% !important; }
 
 /* ---- gráfico ---- */
 .chart-box { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 20px; margin-bottom: 24px; }
@@ -325,6 +329,15 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
                 <div class="pzem-card-sub">desde instalação</div>
             </div>
         </div>
+        <!-- 2026-10-26 -- consumo por mês (diferença do contador acumulado do PZEM entre
+             o fim de cada mês e o fim do anterior). Sempre visível, mesmo com a bomba parada. -->
+        <div class="energia-box">
+            <div class="chart-header" style="margin-bottom:6px;">
+                <span class="chart-title">Consumo da bomba por mês · kWh</span>
+            </div>
+            <div class="energia-resumo" id="energia-resumo">—</div>
+            <div class="energia-wrap"><canvas id="chart-energia"></canvas></div>
+        </div>
     </div>
 
     <!-- Gráfico de nível -->
@@ -347,14 +360,6 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
         <button class="chip" onclick="setPeriodo('hoje',this)">Hoje</button>
         <button class="chip active" onclick="setPeriodo('7d',this)">7 dias</button>
         <button class="chip" onclick="setPeriodo('30d',this)">30 dias</button>
-        <div class="sep"></div>
-        <span class="filter-label">Ordem</span>
-        <button class="chip active" onclick="setOrdem('desc',this)">Mais novo</button>
-        <button class="chip" onclick="setOrdem('asc',this)">Mais antigo</button>
-        <div class="sep"></div>
-        <span class="filter-label">Dados</span>
-        <button class="chip active" onclick="setFiltroRssi(true,this)">Ao vivo</button>
-        <button class="chip" onclick="setFiltroRssi(false,this)">Todos (inclui buffer)</button>
     </div>
 
     <!-- Abas -->
@@ -439,13 +444,12 @@ const LADRAO_CM            = 20;   // transbordo pelo ladrão (marica-346)
 const STALE_MS             = 15 * 60 * 1000;
 
 let periodo      = '7d';
-let ordem        = 'desc';
-let filtroAoVivo = true;  // true = só linhas com wifi_rssi (envio ao vivo); esconde
-                           // o buffer de resiliência de Wi-Fi (registrar_telemetria/
-                           // descarregar_buffer), que nunca carrega RSSI por natureza.
-                           // Nada é apagado no Supabase -- só oculto por padrão; o
-                           // botão "Todos" e o CSV continuam dando acesso completo.
+// 2026-10-26 -- filtros "Ordem" e "Dados (ao vivo/buffer)" removidos a pedido de Peter:
+// tabelas sempre do mais novo para o mais antigo; o buffer de resiliência deixou de
+// existir na Controle v2.x (marica-329), então não há mais linhas a esconder.
 let tabAtiva     = 'telemetria';
+let dadosEnergia = [];    // 2026-10-26 -- consumo mensal (view energia_mensal_marica)
+let chartEnergia = null;
 let dadosTel     = [];
 let dadosSes     = [];
 let dadosGraf    = [];    // 2026-10-26 -- gráfico agregado (view telemetria_marica_grafico, 15 min)
@@ -976,20 +980,15 @@ function atualizarCards(r) {
 
 async function carregarTelemetria() {
     const { ini, fim } = calcularIntervalo();
-    const ord = ordem === 'desc' ? 'created_at.desc' : 'created_at.asc';
-    const filtroExtra = filtroAoVivo ? '&wifi_rssi=not.is.null' : '';
     try {
         const { data, total } = await fetchSupabase('telemetria_marica_publica',
-            `created_at=gte.${ini}&created_at=lte.${fim}${filtroExtra}&order=${ord}&limit=1000`);
+            `created_at=gte.${ini}&created_at=lte.${fim}&order=created_at.desc&limit=1000`);
         dadosTel = data || [];
         renderTelemetria();
-        // 2026-10-26 -- cards e gráfico saíram daqui: com "Mais antigo" (ordem asc) e limite
-        // de 1000 linhas, o "último" registro era o mais ANTIGO do período, e o gráfico cobria
-        // só as ~16h mais recentes. Agora: carregarRecentes() (cards) e carregarGrafico().
+        // 2026-10-26 -- cards e gráfico saíram daqui (limite de 1000 linhas cobria só ~16h).
+        // Agora: carregarRecentes() (cards) e carregarGrafico().
         const t = total.split('/')[1] || dadosTel.length;
-        document.getElementById('tbl-info-tel').textContent = filtroAoVivo
-            ? `${dadosTel.length} de ${t} registros · buffer de resiliência oculto`
-            : `${dadosTel.length} de ${t} registros`;
+        document.getElementById('tbl-info-tel').textContent = `${dadosTel.length} de ${t} registros`;
     } catch(e) {
         document.getElementById('tbody-telemetria').innerHTML =
             '<tr><td colspan="10" style="text-align:center;color:var(--err);padding:24px;">Erro ao carregar. Verifique a conexão.</td></tr>';
@@ -998,7 +997,7 @@ async function carregarTelemetria() {
 
 async function carregarSessoes() {
     const { ini, fim } = calcularIntervalo();
-    const ord = ordem === 'desc' ? 'inicio.desc' : 'inicio.asc';
+    const ord = 'inicio.desc';
     try {
         const [auto, manual] = await Promise.all([
             fetchSupabase('sessoes_marica_publica', `inicio=gte.${ini}&inicio=lte.${fim}&order=${ord}&limit=500`),
@@ -1006,10 +1005,7 @@ async function carregarSessoes() {
         ]);
         const dAuto   = (auto.data   || []).map(s => ({ ...s, origem: 'auto'   }));
         const dManual = (manual.data || []).map(s => ({ ...s, origem: 'manual' }));
-        dadosSes = [...dAuto, ...dManual].sort((a,b) => {
-            const da = new Date(a.inicio), db = new Date(b.inicio);
-            return ordem === 'desc' ? db - da : da - db;
-        });
+        dadosSes = [...dAuto, ...dManual].sort((a,b) => new Date(b.inicio) - new Date(a.inicio));
         renderSessoes();
         const t = (auto.total.split('/')[1] || dAuto.length);
         document.getElementById('tbl-info-ses').textContent = `${dadosSes.length} sessões (${dAuto.length} automáticas, ${dManual.length} manuais)`;
@@ -1329,24 +1325,6 @@ function setPeriodo(p, el) {
     atualizarDados();
 }
 
-function setOrdem(o, el) {
-    ordem = o;
-    document.querySelectorAll('.filters .chip').forEach(c => {
-        if (['Mais novo','Mais antigo'].includes(c.textContent)) c.classList.remove('active');
-    });
-    el.classList.add('active');
-    atualizarDados();
-}
-
-function setFiltroRssi(aoVivo, el) {
-    filtroAoVivo = aoVivo;
-    document.querySelectorAll('.filters .chip').forEach(c => {
-        if (['Ao vivo','Todos (inclui buffer)'].includes(c.textContent)) c.classList.remove('active');
-    });
-    el.classList.add('active');
-    atualizarDados();
-}
-
 function setTab(t, el) {
     tabAtiva = t;
     document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
@@ -1359,7 +1337,89 @@ function setTab(t, el) {
 // (todas as sessões históricas), não dado do período selecionado na tela, então
 // fica fora do par carregarTelemetria()/carregarSessoes() só por clareza de
 // intenção; taxaEnchimentoCmMin já fica pronta antes do próximo atualizarCards().
-function atualizarDados() { carregarRecentes(); carregarGrafico(); carregarTelemetria(); carregarSessoes(); carregarVazaoReal(); }
+// -------------------------------------------------------------
+// 2026-10-26 -- CONSUMO MENSAL (view energia_mensal_marica)
+// -------------------------------------------------------------
+// O PZEM guarda a energia acumulada desde a instalação; a view tira a diferença
+// entre o fim de cada mês e o fim do anterior (fuso de Brasília). O primeiro mês
+// é parcial (desde a instalação) e o mês corrente vai até agora.
+const MESES_PT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+
+async function carregarEnergia() {
+    try {
+        const { data } = await fetchSupabase('energia_mensal_marica', 'order=mes.asc&limit=36');
+        dadosEnergia = data || [];
+        renderEnergia();
+    } catch (e) {
+        // mantém o anterior
+    }
+}
+
+function fmtKwh(v) { return (v === null || v === undefined) ? '—' : Number(v).toFixed(2).replace('.', ',') + ' kWh'; }
+
+function renderEnergia() {
+    const e = dadosEnergia;
+    const resumo = document.getElementById('energia-resumo');
+    if (!e.length) { resumo.textContent = 'Sem dados de energia.'; return; }
+
+    const ultimo = e[e.length - 1], anterior = e.length > 1 ? e[e.length - 2] : null;
+    const nomeMes = m => { const [a, mm] = m.mes.split('-'); return `${MESES_PT[parseInt(mm, 10) - 1]}/${a.slice(2)}`; };
+    resumo.textContent = `Este mês (até agora): ${fmtKwh(ultimo.kwh_mes)}`
+        + (anterior ? ` · ${nomeMes(anterior)}: ${fmtKwh(anterior.kwh_mes)}` : '')
+        + ` · total desde a instalação: ${fmtKwh(ultimo.kwh_acumulado_fim)}`;
+
+    const labels = e.map((m, i) => nomeMes(m) + (m.mes_parcial_inicio ? '*' : i === e.length - 1 ? '…' : ''));
+    const valores = e.map(m => m.kwh_mes === null ? null : Number(m.kwh_mes));
+    const cores = e.map((m, i) => i === e.length - 1 ? 'rgba(0,200,150,0.45)' : 'rgba(0,200,150,0.85)');
+
+    const valoresNoTopo = {
+        id: 'valoresNoTopo',
+        afterDatasetsDraw(chart) {
+            const { ctx } = chart;
+            chart.getDatasetMeta(0).data.forEach((barra, i) => {
+                if (valores[i] === null) return;
+                ctx.save();
+                ctx.fillStyle = '#e2e8f0'; ctx.font = '10px IBM Plex Mono'; ctx.textAlign = 'center';
+                ctx.fillText(valores[i].toFixed(2).replace('.', ','), barra.x, barra.y - 4);
+                ctx.restore();
+            });
+        }
+    };
+
+    if (chartEnergia) chartEnergia.destroy();
+    chartEnergia = new Chart(document.getElementById('chart-energia').getContext('2d'), {
+        type: 'bar',
+        plugins: [valoresNoTopo],
+        data: { labels, datasets: [{ data: valores, backgroundColor: cores, borderRadius: 3, maxBarThickness: 48 }] },
+        options: {
+            responsive: true, maintainAspectRatio: false, animation: false,
+            layout: { padding: { top: 16 } },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#13161d', borderColor: '#1e2230', borderWidth: 1,
+                    titleColor: '#718096', bodyColor: '#e2e8f0',
+                    titleFont: { family: 'IBM Plex Mono', size: 10 }, bodyFont: { family: 'IBM Plex Mono', size: 12 },
+                    callbacks: {
+                        label: item => {
+                            const m = e[item.dataIndex];
+                            const nota = m.mes_parcial_inicio ? ' (parcial, desde a instalação)'
+                                       : item.dataIndex === e.length - 1 ? ' (mês em andamento)' : '';
+                            return fmtKwh(m.kwh_mes) + nota;
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { ticks: { color: '#718096', font: { family: 'IBM Plex Mono', size: 10 } }, grid: { display: false } },
+                y: { beginAtZero: true, ticks: { color: '#4a5568', font: { family: 'IBM Plex Mono', size: 9 }, maxTicksLimit: 4 },
+                     grid: { color: '#1e2230', lineWidth: 0.5 } }
+            }
+        }
+    });
+}
+
+function atualizarDados() { carregarRecentes(); carregarGrafico(); carregarTelemetria(); carregarSessoes(); carregarVazaoReal(); carregarEnergia(); }
 
 atualizarRelogio();
 setInterval(atualizarRelogio, 1000);

@@ -781,7 +781,8 @@ async function fetchSupabase(tabela, params) {
 async function carregarVazaoReal() {
     try {
         const { data } = await fetchSupabase('sessoes_marica_publica',
-            'pzem_w_medio=gt.300&duracao_s=gt.60&variacao_cm=lt.-3&variacao_cm=gt.-60&order=inicio.desc&limit=200');
+            // 2026-10-31: sessões com nível estimado ficam fora (a estimativa já usa a vazão -- seria circular).
+            'pzem_w_medio=gt.300&duracao_s=gt.60&variacao_cm=lt.-3&variacao_cm=gt.-60&nivel_inicio_estimado=is.false&nivel_fim_estimado=is.false&order=inicio.desc&limit=200');
         const taxas = (data || [])
             .map(s => (-s.variacao_cm) / (s.duracao_s / 60))
             .filter(t => isFinite(t) && t > 0)
@@ -1085,14 +1086,17 @@ function renderSessoes() {
         const origemBadge = isManual
             ? '<span class="badge b-warn">Manual · chave física</span>'
             : '<span class="badge b-off">Comando remoto</span>';
-        const vc   = s.variacao_cm !== null && s.variacao_cm !== undefined ? (s.variacao_cm >= 0 ? '+' : '') + s.variacao_cm.toFixed(1) + ' cm' : '—';
+        // 2026-10-31 (marica-383): sessão com a Água em erro usa a estimativa da Bomba -- marcada "(est.)".
+        const estTag = ' <span style="color:var(--txt3);">(est.)</span>';
+        const algumEst = s.nivel_inicio_estimado || s.nivel_fim_estimado;
+        const vc   = s.variacao_cm !== null && s.variacao_cm !== undefined ? (s.variacao_cm >= 0 ? '+' : '') + s.variacao_cm.toFixed(1) + ' cm' + (algumEst ? estTag : '') : '—';
         const vcl  = s.variacao_cm >= 0 ? 'c-ok' : 'c-err';
         const wMed = s.pzem_w_medio !== null && s.pzem_w_medio !== undefined
             ? (isManual ? s.pzem_w_medio.toFixed(0) : s.pzem_w_medio) + ' W' : '—';
         const kwhVal = isManual ? s.pzem_kwh_consumido : s.pzem_kwh_sessao;
         const kwhS = kwhVal !== null && kwhVal !== undefined ? kwhVal.toFixed(3) + ' kWh' : '—';
-        const nivelIni = s.nivel_inicio_cm ? s.nivel_inicio_cm.toFixed(1) + ' cm' : '—';
-        const nivelFim = s.nivel_fim_cm ? s.nivel_fim_cm.toFixed(1) + ' cm' : '—';
+        const nivelIni = s.nivel_inicio_cm ? s.nivel_inicio_cm.toFixed(1) + ' cm' + (s.nivel_inicio_estimado ? estTag : '') : '—';
+        const nivelFim = s.nivel_fim_cm ? s.nivel_fim_cm.toFixed(1) + ' cm' + (s.nivel_fim_estimado ? estTag : '') : '—';
         const fimStr = s.fim ? formatISO(s.fim) : '<span class="badge b-ok">em andamento</span>';
         const duracaoStr = s.fim ? formatDuracao(s.duracao_s) : '—';
         return `<tr>

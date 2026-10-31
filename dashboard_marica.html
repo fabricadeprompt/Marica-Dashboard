@@ -646,6 +646,17 @@ function haTempo(isoString) {
     return 'há ' + Math.floor(h / 24) + 'd';
 }
 
+// 2026-10-31 -- sessões mostram a causa real (causa_desligamento) quando existe;
+// motivo_desliga agrupava tudo que não era nível cheio/manual como "Erro"
+// (ex.: causa 11, tempo de contingência). 0 numa sessão = desligamento manual.
+function causaSessaoLabel(s) {
+    const c = s.causa_desligamento;
+    if (c === null || c === undefined) return motivoLabel(s.motivo_desliga);
+    if (c === 0) return '<span class="badge b-warn">Manual</span>';
+    const info = causaDesligamentoInfo(c);
+    return `<span class="badge ${info.cls}">${info.label}</span>`;
+}
+
 function motivoLabel(m) {
     if (m === 0) return '<span class="badge b-ok">Nível</span>';
     if (m === 1) return '<span class="badge b-warn">Manual</span>';
@@ -1107,7 +1118,7 @@ function renderSessoes() {
             <td class="num">${nivelIni}</td>
             <td class="num">${nivelFim}</td>
             <td class="num ${vcl}" style="font-weight:500;">${vc}</td>
-            <td>${isManual ? '—' : motivoLabel(s.motivo_desliga)}</td>
+            <td>${isManual ? '—' : causaSessaoLabel(s)}</td>
             <td class="num">${wMed}</td>
             <td class="num">${kwhS}</td>
         </tr>`;

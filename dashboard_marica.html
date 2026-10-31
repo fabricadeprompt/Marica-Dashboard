@@ -348,7 +348,6 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
                 <div class="leg"><div class="leg-line" style="background:var(--accent);"></div>Nível</div>
                 <div class="leg"><div class="leg-line" style="background:rgba(0,200,150,.25);height:8px;"></div>Mín–máx</div>
                 <div class="leg"><div class="leg-line" style="background:rgba(0,112,243,.35);height:8px;"></div>Bomba ligada</div>
-                <div class="leg"><div class="leg-dot" style="background:var(--err);"></div>Erro do sensor</div>
             </div>
         </div>
         <div class="chart-wrap"><canvas id="chart-nivel"></canvas></div>
@@ -376,6 +375,7 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
                 <thead><tr>
                     <th class="num">Data/hora</th>
                     <th class="num">Nível</th>
+                    <th class="num">Até cheia</th>
                     <th>Bomba</th>
                     <th>Eventos</th>
                     <th class="num">W</th>
@@ -386,7 +386,7 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
                     <th class="num">RSSI</th>
                 </tr></thead>
                 <tbody id="tbody-telemetria">
-                    <tr><td colspan="10" style="text-align:center;color:var(--txt2);padding:24px;">Carregando dados...</td></tr>
+                    <tr><td colspan="11" style="text-align:center;color:var(--txt2);padding:24px;">Carregando dados...</td></tr>
                 </tbody>
             </table>
             </div>
@@ -440,6 +440,7 @@ const SUPABASE_KEY = 'sb_publishable_ST1iCvU8hUc-wl19RQIV_g_8FfxXNEH';
 const CAIXA_CHEIA_CM       = 30;
 const CAIXA_VAZIA_CM       = 60;   // 2026-10-25 -- escala da Água v3.x: cheia 30, meia 45, vazia 60
 const CAIXA_METADE_CM      = 45;
+const VAZAO_PADRAO_CM_MIN  = 1.27; // mesma da Bomba (VAZAO_CM_MIN), usada até a vazão real calibrar
 const LADRAO_CM            = 20;   // transbordo pelo ladrão (marica-346)
 const STALE_MS             = 15 * 60 * 1000;
 
@@ -991,7 +992,7 @@ async function carregarTelemetria() {
         document.getElementById('tbl-info-tel').textContent = `${dadosTel.length} de ${t} registros`;
     } catch(e) {
         document.getElementById('tbody-telemetria').innerHTML =
-            '<tr><td colspan="10" style="text-align:center;color:var(--err);padding:24px;">Erro ao carregar. Verifique a conexão.</td></tr>';
+            '<tr><td colspan="11" style="text-align:center;color:var(--err);padding:24px;">Erro ao carregar. Verifique a conexão.</td></tr>';
     }
 }
 
@@ -1023,7 +1024,7 @@ async function carregarSessoes() {
 function renderTelemetria() {
     const tbody = document.getElementById('tbody-telemetria');
     if (!dadosTel.length) {
-        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--txt2);padding:24px;">Nenhum registro no período.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center;color:var(--txt2);padding:24px;">Nenhum registro no período.</td></tr>';
         return;
     }
     const dash = '<span style="color:var(--txt3);">—</span>';
@@ -1032,6 +1033,11 @@ function renderTelemetria() {
         const pct    = nivelOk ? nivelPct(r.nivel_cm) : null;
         const pctStr = pct !== null ? pct + '%' : '—';
         const cmStr  = nivelOk && r.nivel_cm ? ' / ' + r.nivel_cm.toFixed(1) + ' cm' : '';
+        // 2026-10-30 -- tempo de bomba até cheia (mesma conta do card). Etapa 1: só nas
+        // linhas com leitura boa; com a contingência da Bomba, passa a usar a estimativa.
+        const vazao   = taxaEnchimentoCmMin || VAZAO_PADRAO_CM_MIN;
+        const ateCheia = !nivelOk ? dash
+            : (r.nivel_cm <= CAIXA_CHEIA_CM ? 'cheia' : formatMinutosEstimativa((r.nivel_cm - CAIXA_CHEIA_CM) / vazao));
         const sigRow = calcularAssinatura(r);
         const isAck  = temErro(r) && erroAckAssinatura === sigRow;
         const rowCls = isAck ? 'ack-row' : '';
@@ -1046,6 +1052,7 @@ function renderTelemetria() {
         return `<tr class="${rowCls}">
             <td class="num">${formatISO(r.created_at)}</td>
             <td class="num">${pctStr}${cmStr}</td>
+            <td class="num">${ateCheia}</td>
             <td>${ativo ? '<span class="badge b-ok">Ligada</span>' : '<span class="badge b-off">Desligada</span>'}</td>
             <td>${evtLabel}</td>
             <td class="num">${wStr}</td>
@@ -1223,7 +1230,6 @@ function renderGrafico() {
     const mediana = g.map(b => num(b.nivel_mediana));
     const minimo  = g.map(b => num(b.nivel_min));
     const maximo  = g.map(b => num(b.nivel_max));
-    const erros   = g.map(b => b.n_erro > 0 ? 16 : null);   // marca vermelha no topo
 
     if (chartInst) chartInst.destroy();
 
@@ -1251,9 +1257,9 @@ function renderGrafico() {
                   backgroundColor: 'rgba(0,200,150,0.14)', spanGaps: false },
                 { label: 'mín', data: minimo, borderWidth: 0, pointRadius: 0, fill: false, spanGaps: false },
                 { label: 'Nível', data: mediana, borderColor: '#00c896', borderWidth: 2, pointRadius: 0,
-                  tension: 0, fill: false, spanGaps: false },
-                { label: 'Erro', data: erros, showLine: false, pointRadius: 3, pointHoverRadius: 4,
-                  pointBackgroundColor: '#e53e3e', pointBorderWidth: 0 }
+                  tension: 0, fill: false, spanGaps: false }
+                // 2026-10-30 -- marcas de erro removidas a pedido de Peter (poluíam o gráfico;
+                // os erros continuam na coluna Eventos da tabela)
             ]
         },
         options: {
@@ -1272,7 +1278,6 @@ function renderGrafico() {
                     callbacks: {
                         label: item => {
                             const b = g[item.dataIndex];
-                            if (item.datasetIndex === 3) return `Erro do sensor: ${b.n_erro} de ${b.n} leituras`;
                             if (b.nivel_mediana === null) return 'Sem leitura válida';
                             return `${num(b.nivel_mediana).toFixed(1)} cm (mín ${num(b.nivel_min).toFixed(1)} · máx ${num(b.nivel_max).toFixed(1)})`
                                 + (b.bomba_ligada ? ' · bomba ligada' : '');

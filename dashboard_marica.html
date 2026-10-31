@@ -536,6 +536,7 @@ const CAUSA_DESLIGA_BOMBA = {
     8: { label: 'OTA',                         cls: 'b-off'  },
     9: { label: 'Nível não sobe',              cls: 'b-err'  },
     10: { label: 'Tempo esperado esgotado',    cls: 'b-warn' },
+    11: { label: 'Tempo de contingência',      cls: 'b-warn' },  // Bomba v2.5: Água em erro, parou pela estimativa
 };
 
 function causaDesligamentoInfo(m) {
@@ -1032,12 +1033,20 @@ function renderTelemetria() {
         const nivelOk = nivelDisponivel(r);
         const pct    = nivelOk ? nivelPct(r.nivel_cm) : null;
         const pctStr = pct !== null ? pct + '%' : '—';
-        const cmStr  = nivelOk && r.nivel_cm ? ' / ' + r.nivel_cm.toFixed(1) + ' cm' : '';
-        // 2026-10-30 -- tempo de bomba até cheia (mesma conta do card). Etapa 1: só nas
-        // linhas com leitura boa; com a contingência da Bomba, passa a usar a estimativa.
+        // 2026-10-30 -- Água em erro com a Bomba v2.5: nivel_estimado_cm (estimativa da
+        // Bomba) e tempo_ate_cheia_min (coluna gerada no banco, 1,27 cm/min) -- marcados "est.".
+        const temEstimativa = !nivelOk && !r.bomba_offline && !r.agua_offline &&
+                              r.nivel_estimado_cm > 0 && r.tempo_ate_cheia_min !== null && r.tempo_ate_cheia_min !== undefined;
+        const estTag = ' <span style="color:var(--txt3);">(est.)</span>';
+        const cmStr  = nivelOk && r.nivel_cm ? ' / ' + r.nivel_cm.toFixed(1) + ' cm'
+                     : temEstimativa ? ' / ' + r.nivel_estimado_cm.toFixed(1) + ' cm' + estTag : '';
+        // Tempo de bomba até cheia (mesma conta do card) nas linhas com leitura boa.
         const vazao   = taxaEnchimentoCmMin || VAZAO_PADRAO_CM_MIN;
-        const ateCheia = !nivelOk ? dash
-            : (r.nivel_cm <= CAIXA_CHEIA_CM ? 'cheia' : formatMinutosEstimativa((r.nivel_cm - CAIXA_CHEIA_CM) / vazao));
+        const ateCheia = nivelOk
+            ? (r.nivel_cm <= CAIXA_CHEIA_CM ? 'cheia' : formatMinutosEstimativa((r.nivel_cm - CAIXA_CHEIA_CM) / vazao))
+            : temEstimativa
+                ? (r.tempo_ate_cheia_min <= 0 ? 'cheia' : formatMinutosEstimativa(r.tempo_ate_cheia_min)) + estTag
+                : dash;
         const sigRow = calcularAssinatura(r);
         const isAck  = temErro(r) && erroAckAssinatura === sigRow;
         const rowCls = isAck ? 'ack-row' : '';

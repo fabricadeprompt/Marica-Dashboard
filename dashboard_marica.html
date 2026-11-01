@@ -309,6 +309,16 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
         </div>
     </div>
 
+    <!-- 2026-11-01 (marica-395): confiança do sistema desde a última atualização de firmware -->
+    <div class="card" id="card-confianca-box" style="margin-bottom:12px;">
+        <div class="card-label">Confiança do sistema</div>
+        <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;">
+            <div class="card-val c-off" id="card-confianca">—</div>
+            <div class="card-sub" id="card-confianca-sub">do tempo o nível mostrado esteve a até 2 cm do real</div>
+        </div>
+        <div class="card-sub" id="card-confianca-det" style="margin-top:4px;">—</div>
+    </div>
+
     <!-- Bloco elétrico: PZEM-004T -->
     <div class="pzem-section">
         <div class="pzem-header">
@@ -1471,7 +1481,32 @@ function renderEnergia() {
     });
 }
 
-function atualizarDados() { carregarRecentes(); carregarGrafico(); carregarTelemetria(); carregarSessoes(); carregarVazaoReal(); carregarEnergia(); }
+// 2026-11-01 (marica-395) -- view confianca_marica_publica: % do tempo, desde a última
+// gravação de firmware, com o nível mostrado (real ou estimado) a até 2 cm do real.
+async function carregarConfianca() {
+    const el = document.getElementById('card-confianca');
+    const det = document.getElementById('card-confianca-det');
+    try {
+        const { data } = await fetchSupabase('confianca_marica_publica', 'limit=1');
+        const c = Array.isArray(data) ? data[0] : null;
+        if (!c || c.confianca_pct === null || c.confianca_pct === undefined) { el.textContent = '—'; det.textContent = 'Sem dados ainda.'; return; }
+        const pct = Number(c.confianca_pct);
+        el.textContent = pct.toFixed(1) + '%';
+        el.className = 'card-val ' + (pct >= 98 ? 'c-ok' : pct >= 95 ? 'c-warn' : 'c-err');
+        const nomes = { agua: 'Água', bomba: 'Bomba', controle: 'Controle' };
+        const d = new Date(c.desde);
+        const quando = d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        const est = c.episodios > 0
+            ? `estimado ${Number(c.estimado_pct).toFixed(0)}% (${c.episodios} ${c.episodios === 1 ? 'erro' : 'erros'} do sensor, diferença média ${Number(c.erro_medio_cm).toFixed(1)} cm, máx. ${Number(c.erro_max_cm).toFixed(1)} cm)`
+            : `estimado ${Number(c.estimado_pct).toFixed(0)}%`;
+        det.textContent = `Desde a atualização ${nomes[c.caixa] || c.caixa} v${c.versao_nova} (${quando}) · leitura real ${Number(c.real_pct).toFixed(0)}% · ${est} · sem nível ${Number(c.sem_nivel_pct).toFixed(0)}%`;
+    } catch (e) {
+        el.textContent = '—';
+        det.textContent = 'Indisponível.';
+    }
+}
+
+function atualizarDados() { carregarConfianca(); carregarRecentes(); carregarGrafico(); carregarTelemetria(); carregarSessoes(); carregarVazaoReal(); carregarEnergia(); }
 
 atualizarRelogio();
 setInterval(atualizarRelogio, 1000);

@@ -846,6 +846,14 @@ function atualizarBlocoPzem(r) {
     badge.textContent    = r.bomba_ligada ? 'ao vivo' : 'standby · a cada 1min';
 }
 
+// 2026-10-31 -- Água em erro com a Bomba v2.5+: os cards usam a estimativa da
+// Bomba (nivel_estimado_cm) e o tempo gravado no banco (tempo_ate_cheia_min,
+// 1,27 cm/min -- o mesmo que a Bomba usa para parar). Marcados "estimado".
+function nivelEstimadoCard(r) {
+    if (nivelDisponivel(r) || r.bomba_offline || r.agua_offline || !r.erro_sensor) return null;
+    return r.nivel_estimado_cm > 0 ? r.nivel_estimado_cm : null;
+}
+
 // Card "Tempo até cheia (30cm)" -- estimativa sempre visível (mesmo com a
 // bomba desligada, pedido de Peter: "se eu ligar agora"), calculada a partir
 // do nível atual e da vazão real calibrada em carregarVazaoReal(). Distância
@@ -855,6 +863,13 @@ function atualizarCardTempoCheia(r) {
     const elSub = document.getElementById('card-tempo-cheia-sub');
 
     if (!nivelDisponivel(r)) {
+        const est = nivelEstimadoCard(r);
+        if (est !== null && r.tempo_ate_cheia_min !== null && r.tempo_ate_cheia_min !== undefined) {
+            el.textContent  = r.tempo_ate_cheia_min <= 0 ? 'Cheia' : '≈ ' + formatMinutosEstimativa(r.tempo_ate_cheia_min);
+            el.className    = 'card-val ' + (r.tempo_ate_cheia_min <= 0 ? 'c-ok' : 'c-blue');
+            elSub.textContent = `Estimado (sensor em erro) · nível ≈ ${est.toFixed(1)} cm · vazão ${VAZAO_PADRAO_CM_MIN.toFixed(2)} cm/min`;
+            return;
+        }
         el.textContent  = '—';
         el.className    = 'card-val c-off';
         elSub.textContent = 'Nível indisponível';
@@ -888,11 +903,13 @@ function atualizarCardTempoCheia(r) {
 
 function atualizarCards(r) {
     const disponivel = nivelDisponivel(r);
-    const pct = disponivel ? nivelPct(r.nivel_cm) : null;
+    const est = disponivel ? null : nivelEstimadoCard(r);
+    const pct = disponivel ? nivelPct(r.nivel_cm) : (est !== null ? nivelPct(est) : null);
     const elN = document.getElementById('card-nivel');
-    elN.textContent = pct !== null ? pct + '%' : '—';
+    elN.textContent = pct !== null ? (est !== null ? '≈ ' : '') + pct + '%' : '—';
     elN.className   = 'card-val ' + (pct === null ? 'c-off' : pct > 50 ? 'c-ok' : pct > 20 ? 'c-warn' : 'c-err');
-    document.getElementById('card-nivel-cm').textContent = disponivel && r.nivel_cm ? r.nivel_cm.toFixed(1) + ' cm' : '— cm';
+    document.getElementById('card-nivel-cm').textContent = disponivel && r.nivel_cm ? r.nivel_cm.toFixed(1) + ' cm'
+        : est !== null ? '≈ ' + est.toFixed(1) + ' cm · estimado (sensor em erro)' : '— cm';
 
     const bar = document.getElementById('nivel-bar');
     const bp  = pct !== null ? pct : 0;

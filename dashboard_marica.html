@@ -481,10 +481,16 @@ const MOTIVO_AGUA = {
     3: { label: 'Leitura travada (umidade)',           cls: 'b-err'  },
     4: { label: 'Instabilidade (histórico)',           cls: 'b-err'  },
     5: { label: 'Aceito pós-boot (histórico)',         cls: 'b-blue' },
+    // 2026-11-01 -- Água v3.3 (marica-390): o erro de leitura diz o tipo.
+    6: { label: 'Sem eco',                             cls: 'b-err'  },
+    7: { label: 'Acima da faixa (eco dobrado)',        cls: 'b-err'  },
+    8: { label: 'Abaixo da faixa (perto do sensor)',   cls: 'b-err'  },
 };
 
 function motivoAguaInfo(m) {
-    return MOTIVO_AGUA[m] ?? MOTIVO_AGUA[0];
+    // 2026-11-01: código desconhecido não pode virar "Normal".
+    if (m === null || m === undefined) return MOTIVO_AGUA[0];
+    return MOTIVO_AGUA[m] ?? { label: `Erro de leitura (código ${m})`, cls: 'b-err' };
 }
 
 function motivoAguaBadge(m) {

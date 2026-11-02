@@ -339,24 +339,16 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
                 <div class="pzem-card-sub">desde instalação</div>
             </div>
         </div>
-        <!-- 2026-10-26 -- consumo por mês (diferença do contador acumulado do PZEM entre
-             o fim de cada mês e o fim do anterior). Sempre visível, mesmo com a bomba parada. -->
+        <!-- 2026-11-02 (marica-406) -- bomba por mês: litros, kWh e custo num gráfico só
+             (substitui os blocos "Consumo da bomba por mês" e "Água bombeada por mês").
+             Até out/26 litros pela energia; desde nov/26 pelo nível (view agua_mensal_marica). -->
         <div class="energia-box">
             <div class="chart-header" style="margin-bottom:6px;">
-                <span class="chart-title">Consumo da bomba por mês · kWh</span>
-            </div>
-            <div class="energia-resumo" id="energia-resumo">—</div>
-            <div class="energia-wrap"><canvas id="chart-energia"></canvas></div>
-        </div>
-        <!-- 2026-11-02 (marica-404) -- água bombeada por mês (view agua_mensal_marica):
-             subida medida em cada acionamento, convertida em litros pelas 2 caixas Tigre 1.000 L. -->
-        <div class="energia-box">
-            <div class="chart-header" style="margin-bottom:6px;">
-                <span class="chart-title">Água bombeada por mês · litros</span>
+                <span class="chart-title">Bomba por mês · água, energia e custo</span>
             </div>
             <div class="energia-resumo" id="agua-resumo">—</div>
-            <div class="energia-wrap"><canvas id="chart-agua"></canvas></div>
-            <div class="energia-resumo" id="agua-nota" style="margin:8px 0 0; font-size:10px; color:var(--txt3);"></div>
+            <div class="energia-wrap" style="height:210px;"><canvas id="chart-agua"></canvas></div>
+            <div class="energia-resumo" id="agua-nota" style="margin:8px 0 0; font-size:10px; color:var(--txt3); line-height:1.5;"></div>
         </div>
     </div>
 
@@ -469,10 +461,6 @@ let periodo      = '7d';
 // tabelas sempre do mais novo para o mais antigo; o buffer de resiliência deixou de
 // existir na Controle v2.x (marica-329), então não há mais linhas a esconder.
 let tabAtiva     = 'telemetria';
-let dadosEnergia = [];    // 2026-10-26 -- consumo mensal (view energia_mensal_marica)
-let chartEnergia = null;
-let dadosAgua = [];       // 2026-11-02 -- água bombeada por mês (view agua_mensal_marica)
-let chartAgua = null;
 let dadosTel     = [];
 let dadosSes     = [];
 let dadosGraf    = [];    // 2026-10-26 -- gráfico agregado (view telemetria_marica_grafico, 15 min)
@@ -1421,87 +1409,20 @@ function setTab(t, el) {
 // é parcial (desde a instalação) e o mês corrente vai até agora.
 const MESES_PT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
 
-async function carregarEnergia() {
-    try {
-        const { data } = await fetchSupabase('energia_mensal_marica', 'order=mes.asc&limit=36');
-        dadosEnergia = data || [];
-        renderEnergia();
-    } catch (e) {
-        // mantém o anterior
-    }
-}
-
 function fmtKwh(v) { return (v === null || v === undefined) ? '—' : Number(v).toFixed(2).replace('.', ',') + ' kWh'; }
 
-function renderEnergia() {
-    const e = dadosEnergia;
-    const resumo = document.getElementById('energia-resumo');
-    if (!e.length) { resumo.textContent = 'Sem dados de energia.'; return; }
-
-    const ultimo = e[e.length - 1], anterior = e.length > 1 ? e[e.length - 2] : null;
-    const nomeMes = m => { const [a, mm] = m.mes.split('-'); return `${MESES_PT[parseInt(mm, 10) - 1]}/${a.slice(2)}`; };
-    resumo.textContent = `Este mês (até agora): ${fmtKwh(ultimo.kwh_mes)}`
-        + (anterior ? ` · ${nomeMes(anterior)}: ${fmtKwh(anterior.kwh_mes)}` : '')
-        + ` · total desde a instalação: ${fmtKwh(ultimo.kwh_acumulado_fim)}`;
-
-    const labels = e.map((m, i) => nomeMes(m) + (m.mes_parcial_inicio ? '*' : i === e.length - 1 ? '…' : ''));
-    const valores = e.map(m => m.kwh_mes === null ? null : Number(m.kwh_mes));
-    const cores = e.map((m, i) => i === e.length - 1 ? 'rgba(0,200,150,0.45)' : 'rgba(0,200,150,0.85)');
-
-    const valoresNoTopo = {
-        id: 'valoresNoTopo',
-        afterDatasetsDraw(chart) {
-            const { ctx } = chart;
-            chart.getDatasetMeta(0).data.forEach((barra, i) => {
-                if (valores[i] === null) return;
-                ctx.save();
-                ctx.fillStyle = '#e2e8f0'; ctx.font = '10px IBM Plex Mono'; ctx.textAlign = 'center';
-                ctx.fillText(valores[i].toFixed(2).replace('.', ','), barra.x, barra.y - 4);
-                ctx.restore();
-            });
-        }
-    };
-
-    if (chartEnergia) chartEnergia.destroy();
-    chartEnergia = new Chart(document.getElementById('chart-energia').getContext('2d'), {
-        type: 'bar',
-        plugins: [valoresNoTopo],
-        data: { labels, datasets: [{ data: valores, backgroundColor: cores, borderRadius: 3, maxBarThickness: 48 }] },
-        options: {
-            responsive: true, maintainAspectRatio: false, animation: false,
-            layout: { padding: { top: 16 } },
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    backgroundColor: '#13161d', borderColor: '#1e2230', borderWidth: 1,
-                    titleColor: '#718096', bodyColor: '#e2e8f0',
-                    titleFont: { family: 'IBM Plex Mono', size: 10 }, bodyFont: { family: 'IBM Plex Mono', size: 12 },
-                    callbacks: {
-                        label: item => {
-                            const m = e[item.dataIndex];
-                            const nota = m.mes_parcial_inicio ? ' (parcial, desde a instalação)'
-                                       : item.dataIndex === e.length - 1 ? ' (mês em andamento)' : '';
-                            return fmtKwh(m.kwh_mes) + nota;
-                        }
-                    }
-                }
-            },
-            scales: {
-                x: { ticks: { color: '#718096', font: { family: 'IBM Plex Mono', size: 10 } }, grid: { display: false } },
-                y: { beginAtZero: true, ticks: { color: '#4a5568', font: { family: 'IBM Plex Mono', size: 9 }, maxTicksLimit: 4 },
-                     grid: { color: '#1e2230', lineWidth: 0.5 } }
-            }
-        }
-    });
-}
-
 // -------------------------------------------------------------
-// 2026-11-02 (marica-404) -- ÁGUA BOMBEADA POR MÊS (view agua_mensal_marica)
+// 2026-11-02 (marica-406) -- BOMBA POR MÊS: ÁGUA, ENERGIA E CUSTO (view agua_mensal_marica)
 // -------------------------------------------------------------
-// Cada acionamento (carga no PZEM, inclusive no seletor Manual) vira litros pela subida
-// de nível medida. Mês com energia sem subida medida (sensor sem leitura) fica "parcial":
-// o volume real foi maior que o mostrado.
-const AGUA_KWH_PARCIAL = 0.05;
+// Até out/26: litros = kWh x referência (subidas medidas jul-out). Desde nov/26: litros
+// medidos pelo nível; a conferência compara os litros por kWh do mês com a referência.
+// Custo ESTIMADO: tarifa Enel Rio B1 (REH 3.570/2026, R$ 1,06/kWh sem impostos) com
+// ICMS 20% e PIS/Cofins ~5% por dentro, sem bandeira. Trocar aqui quando houver a conta.
+const PRECO_KWH = 1.41;
+const AGUA_DESVIO_ALERTA = 0.15;
+
+let dadosAgua = [];
+let chartAgua = null;
 
 async function carregarAgua() {
     try {
@@ -1513,45 +1434,51 @@ async function carregarAgua() {
     }
 }
 
-function fmtLitros(v) { return Math.round(Number(v)).toLocaleString('pt-BR'); }
+function fmtLitros(v) { return Math.round(Number(v)).toLocaleString('pt-BR') + ' L'; }
+function fmtReais(v)  { return 'R$ ' + Number(v).toFixed(2).replace('.', ','); }
 
 function renderAgua() {
     const a = dadosAgua;
     const resumo = document.getElementById('agua-resumo');
     const nota = document.getElementById('agua-nota');
-    if (!a.length) { resumo.textContent = 'Sem dados de água.'; nota.textContent = ''; return; }
+    if (!a.length) { resumo.textContent = 'Sem dados.'; nota.textContent = ''; return; }
 
     const nomeMes = m => { const [y, mm] = m.mes.split('-'); return `${MESES_PT[parseInt(mm, 10) - 1]}/${y.slice(2)}`; };
-    const parcial = m => Number(m.kwh_sem_subida) > AGUA_KWH_PARCIAL;
-    const ultimo = a[a.length - 1], anterior = a.length > 1 ? a[a.length - 2] : null;
+    const kwh = m => Number(m.kwh_mes || 0);
+    const ultimo = a[a.length - 1];
+    const totL = a.reduce((s, m) => s + Number(m.litros || 0), 0);
+    const totK = a.reduce((s, m) => s + kwh(m), 0);
 
-    // eficiência média só com acionamentos que tiveram subida medida
-    const lit = a.reduce((s, m) => s + Number(m.litros || 0), 0);
-    const kwh = a.reduce((s, m) => s + Number(m.kwh_com_subida || 0), 0);
-    const efic = kwh > 0 ? Math.round(lit / kwh / 100) * 100 : null;
+    resumo.textContent = `Este mês (até agora): ${fmtLitros(ultimo.litros)} · ${fmtKwh(ultimo.kwh_mes)} · ${fmtReais(kwh(ultimo) * PRECO_KWH)}`
+        + ` · total desde ${nomeMes(a[0])}: ${fmtLitros(totL)} · ${fmtKwh(totK)} · ${fmtReais(totK * PRECO_KWH)}`;
 
-    resumo.textContent = `Este mês (até agora): ${fmtLitros(ultimo.litros)} L`
-        + (anterior ? ` · ${nomeMes(anterior)}: ${fmtLitros(anterior.litros)} L` : '')
-        + (efic ? ` · ~${efic.toLocaleString('pt-BR')} L por kWh` : '');
-
-    const parciais = a.filter(parcial);
-    nota.textContent = parciais.length
-        ? 'Barras claras = parcial (volume real maior; parte da energia sem subida medida): '
-          + parciais.map(m => `${nomeMes(m)} ${fmtKwh(m.kwh_sem_subida)}`).join(' · ')
-        : '';
+    // conferência ("prova de ouro") dos meses medidos pelo nível
+    const ref = a[0].ref_litros_por_kwh;
+    const conf = a.filter(m => m.metodo === 'nivel' && m.litros_por_kwh !== null).map(m => {
+        const desvio = Math.abs(m.litros_por_kwh / ref - 1);
+        const txt = `${nomeMes(m)}: ${Number(m.litros_por_kwh).toLocaleString('pt-BR')} L/kWh (referência ${Number(ref).toLocaleString('pt-BR')})`;
+        return desvio > AGUA_DESVIO_ALERTA ? `<span style="color:var(--warn)">⚠ ${txt}</span>` : `✓ ${txt}`;
+    });
+    nota.innerHTML = '<span style="color:rgba(0,112,243,0.55)">■</span> claro: litros estimados pela energia (até out/26) · '
+        + '<span style="color:rgba(0,112,243,1)">■</span> forte: medidos pelo nível (desde nov/26). Inclui água que transbordou pelo ladrão.<br>'
+        + (conf.length ? 'Conferência: ' + conf.join(' · ') + '<br>' : '')
+        + `Custo estimado a ${fmtReais(PRECO_KWH)}/kWh (tarifa Enel Rio + impostos, sem bandeira).`;
 
     const labels = a.map((m, i) => nomeMes(m) + (m.mes_parcial_inicio ? '*' : i === a.length - 1 ? '…' : ''));
     const valores = a.map(m => Number(m.litros));
-    const cores = a.map(m => parcial(m) ? 'rgba(0,112,243,0.35)' : 'rgba(0,112,243,0.85)');
+    const cores = a.map(m => m.metodo === 'nivel' ? 'rgba(0,112,243,0.9)' : 'rgba(0,112,243,0.4)');
 
-    const litrosNoTopo = {
-        id: 'litrosNoTopo',
+    const tresLinhas = {
+        id: 'tresLinhas',
         afterDatasetsDraw(chart) {
             const { ctx } = chart;
             chart.getDatasetMeta(0).data.forEach((barra, i) => {
+                const m = a[i];
                 ctx.save();
-                ctx.fillStyle = '#e2e8f0'; ctx.font = '10px IBM Plex Mono'; ctx.textAlign = 'center';
-                ctx.fillText(fmtLitros(valores[i]), barra.x, barra.y - 4);
+                ctx.textAlign = 'center'; ctx.font = '10px IBM Plex Mono';
+                ctx.fillStyle = '#e2e8f0'; ctx.fillText(fmtLitros(m.litros), barra.x, barra.y - 28);
+                ctx.fillStyle = '#a0aec0'; ctx.fillText(fmtKwh(m.kwh_mes), barra.x, barra.y - 16);
+                ctx.fillStyle = '#a0aec0'; ctx.fillText(fmtReais(kwh(m) * PRECO_KWH), barra.x, barra.y - 4);
                 ctx.restore();
             });
         }
@@ -1560,18 +1487,16 @@ function renderAgua() {
     if (chartAgua) chartAgua.destroy();
     chartAgua = new Chart(document.getElementById('chart-agua').getContext('2d'), {
         type: 'bar',
-        plugins: [litrosNoTopo],
-        data: { labels, datasets: [{ data: valores, backgroundColor: cores, borderRadius: 3, maxBarThickness: 48 }] },
+        plugins: [tresLinhas],
+        data: { labels, datasets: [{ data: valores, backgroundColor: cores, borderRadius: 3, maxBarThickness: 56 }] },
         options: {
             responsive: true, maintainAspectRatio: false, animation: false,
-            layout: { padding: { top: 16 } },
-            events: [],   // sem caixa de valores nem destaque ao clicar (como no gráfico de nível)
+            layout: { padding: { top: 42 } },
+            events: [],   // sem caixa de valores nem destaque ao clicar
             plugins: { legend: { display: false }, tooltip: { enabled: false } },
             scales: {
                 x: { ticks: { color: '#718096', font: { family: 'IBM Plex Mono', size: 10 } }, grid: { display: false } },
-                y: { beginAtZero: true, ticks: { color: '#4a5568', font: { family: 'IBM Plex Mono', size: 9 }, maxTicksLimit: 4,
-                                                 callback: v => Number(v).toLocaleString('pt-BR') },
-                     grid: { color: '#1e2230', lineWidth: 0.5 } }
+                y: { beginAtZero: true, ticks: { display: false }, grid: { color: '#1e2230', lineWidth: 0.5 } }
             }
         }
     });
@@ -1602,7 +1527,7 @@ async function carregarConfianca() {
     }
 }
 
-function atualizarDados() { carregarConfianca(); carregarRecentes(); carregarGrafico(); carregarTelemetria(); carregarSessoes(); carregarVazaoReal(); carregarEnergia(); carregarAgua(); }
+function atualizarDados() { carregarConfianca(); carregarRecentes(); carregarGrafico(); carregarTelemetria(); carregarSessoes(); carregarVazaoReal(); carregarAgua(); }
 
 atualizarRelogio();
 setInterval(atualizarRelogio, 1000);

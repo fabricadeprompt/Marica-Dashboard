@@ -309,6 +309,19 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
         </div>
     </div>
 
+    <!-- Gráfico de nível (2026-11-02: movido para antes da confiança, a pedido de Peter) -->
+    <div class="chart-box">
+        <div class="chart-header">
+            <span class="chart-title">Nível do reservatório · cm, mediana a cada 15 min</span>
+            <div class="legend">
+                <div class="leg"><div class="leg-line" style="background:var(--accent);"></div>Nível</div>
+                <div class="leg"><div class="leg-line" style="background:rgba(0,200,150,.25);height:8px;"></div>Mín–máx</div>
+                <div class="leg"><div class="leg-line" style="background:rgba(0,112,243,.35);height:8px;"></div>Bomba ligada</div>
+            </div>
+        </div>
+        <div class="chart-wrap"><canvas id="chart-nivel"></canvas></div>
+    </div>
+
     <!-- 2026-11-01 (marica-395): confiança do sistema desde a última atualização de firmware -->
     <div class="card" id="card-confianca-box" style="margin-bottom:12px;">
         <div class="card-label">Confiança do sistema</div>
@@ -350,19 +363,6 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
             <div class="energia-wrap" style="height:225px;"><canvas id="chart-agua"></canvas></div>
             <div class="energia-resumo" id="agua-nota" style="margin:8px 0 0; font-size:10px; color:var(--txt3); line-height:1.5;"></div>
         </div>
-    </div>
-
-    <!-- Gráfico de nível -->
-    <div class="chart-box">
-        <div class="chart-header">
-            <span class="chart-title">Nível do reservatório · cm, mediana a cada 15 min</span>
-            <div class="legend">
-                <div class="leg"><div class="leg-line" style="background:var(--accent);"></div>Nível</div>
-                <div class="leg"><div class="leg-line" style="background:rgba(0,200,150,.25);height:8px;"></div>Mín–máx</div>
-                <div class="leg"><div class="leg-line" style="background:rgba(0,112,243,.35);height:8px;"></div>Bomba ligada</div>
-            </div>
-        </div>
-        <div class="chart-wrap"><canvas id="chart-nivel"></canvas></div>
     </div>
 
     <!-- Filtros -->

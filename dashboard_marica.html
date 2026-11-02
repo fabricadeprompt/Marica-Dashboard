@@ -347,7 +347,7 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
                 <span class="chart-title">Bomba por mês · água, energia e custo</span>
             </div>
             <div class="energia-resumo" id="agua-resumo">—</div>
-            <div class="energia-wrap" style="height:210px;"><canvas id="chart-agua"></canvas></div>
+            <div class="energia-wrap" style="height:225px;"><canvas id="chart-agua"></canvas></div>
             <div class="energia-resumo" id="agua-nota" style="margin:8px 0 0; font-size:10px; color:var(--txt3); line-height:1.5;"></div>
         </div>
     </div>
@@ -1436,6 +1436,11 @@ async function carregarAgua() {
 
 function fmtLitros(v) { return Math.round(Number(v)).toLocaleString('pt-BR') + ' L'; }
 function fmtReais(v)  { return 'R$ ' + Number(v).toFixed(2).replace('.', ','); }
+// 2026-11-02 (marica-407) -- tempo ligada: kWh do mês / potência média com carga (view)
+function fmtTempo(min) {
+    const m = Math.round(Number(min || 0));
+    return m < 60 ? `${m} min` : `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}`;
+}
 
 function renderAgua() {
     const a = dadosAgua;
@@ -1448,9 +1453,10 @@ function renderAgua() {
     const ultimo = a[a.length - 1];
     const totL = a.reduce((s, m) => s + Number(m.litros || 0), 0);
     const totK = a.reduce((s, m) => s + kwh(m), 0);
+    const totMin = a.reduce((s, m) => s + Number(m.minutos_ligada || 0), 0);
 
-    resumo.textContent = `Este mês (até agora): ${fmtLitros(ultimo.litros)} · ${fmtKwh(ultimo.kwh_mes)} · ${fmtReais(kwh(ultimo) * PRECO_KWH)}`
-        + ` · total desde ${nomeMes(a[0])}: ${fmtLitros(totL)} · ${fmtKwh(totK)} · ${fmtReais(totK * PRECO_KWH)}`;
+    resumo.textContent = `Este mês (até agora): ${fmtLitros(ultimo.litros)} · ${fmtTempo(ultimo.minutos_ligada)} · ${fmtKwh(ultimo.kwh_mes)} · ${fmtReais(kwh(ultimo) * PRECO_KWH)}`
+        + ` · total desde ${nomeMes(a[0])}: ${fmtLitros(totL)} · ${fmtTempo(totMin)} · ${fmtKwh(totK)} · ${fmtReais(totK * PRECO_KWH)}`;
 
     // conferência ("prova de ouro") dos meses medidos pelo nível
     const ref = a[0].ref_litros_por_kwh;
@@ -1462,7 +1468,7 @@ function renderAgua() {
     nota.innerHTML = '<span style="color:rgba(0,112,243,0.55)">■</span> claro: litros estimados pela energia (até out/26) · '
         + '<span style="color:rgba(0,112,243,1)">■</span> forte: medidos pelo nível (desde nov/26). Inclui água que transbordou pelo ladrão.<br>'
         + (conf.length ? 'Conferência: ' + conf.join(' · ') + '<br>' : '')
-        + `Custo estimado a ${fmtReais(PRECO_KWH)}/kWh (tarifa Enel Rio + impostos, sem bandeira).`;
+        + `Tempo ligada = energia do mês ÷ potência média da bomba. Custo estimado a ${fmtReais(PRECO_KWH)}/kWh (tarifa Enel Rio + impostos, sem bandeira).`;
 
     const labels = a.map((m, i) => nomeMes(m) + (m.mes_parcial_inicio ? '*' : i === a.length - 1 ? '…' : ''));
     const valores = a.map(m => Number(m.litros));
@@ -1476,7 +1482,8 @@ function renderAgua() {
                 const m = a[i];
                 ctx.save();
                 ctx.textAlign = 'center'; ctx.font = '10px IBM Plex Mono';
-                ctx.fillStyle = '#e2e8f0'; ctx.fillText(fmtLitros(m.litros), barra.x, barra.y - 28);
+                ctx.fillStyle = '#e2e8f0'; ctx.fillText(fmtLitros(m.litros), barra.x, barra.y - 40);
+                ctx.fillStyle = '#a0aec0'; ctx.fillText(fmtTempo(m.minutos_ligada), barra.x, barra.y - 28);
                 ctx.fillStyle = '#a0aec0'; ctx.fillText(fmtKwh(m.kwh_mes), barra.x, barra.y - 16);
                 ctx.fillStyle = '#a0aec0'; ctx.fillText(fmtReais(kwh(m) * PRECO_KWH), barra.x, barra.y - 4);
                 ctx.restore();
@@ -1491,7 +1498,7 @@ function renderAgua() {
         data: { labels, datasets: [{ data: valores, backgroundColor: cores, borderRadius: 3, maxBarThickness: 56 }] },
         options: {
             responsive: true, maintainAspectRatio: false, animation: false,
-            layout: { padding: { top: 42 } },
+            layout: { padding: { top: 54 } },
             events: [],   // sem caixa de valores nem destaque ao clicar
             plugins: { legend: { display: false }, tooltip: { enabled: false } },
             scales: {

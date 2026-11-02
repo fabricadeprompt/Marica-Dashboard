@@ -348,6 +348,16 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
             <div class="energia-resumo" id="energia-resumo">—</div>
             <div class="energia-wrap"><canvas id="chart-energia"></canvas></div>
         </div>
+        <!-- 2026-11-02 (marica-404) -- água bombeada por mês (view agua_mensal_marica):
+             subida medida em cada acionamento, convertida em litros pelas 2 caixas Tigre 1.000 L. -->
+        <div class="energia-box">
+            <div class="chart-header" style="margin-bottom:6px;">
+                <span class="chart-title">Água bombeada por mês · litros</span>
+            </div>
+            <div class="energia-resumo" id="agua-resumo">—</div>
+            <div class="energia-wrap"><canvas id="chart-agua"></canvas></div>
+            <div class="energia-resumo" id="agua-nota" style="margin:8px 0 0; font-size:10px; color:var(--txt3);"></div>
+        </div>
     </div>
 
     <!-- Gráfico de nível -->
@@ -461,6 +471,8 @@ let periodo      = '7d';
 let tabAtiva     = 'telemetria';
 let dadosEnergia = [];    // 2026-10-26 -- consumo mensal (view energia_mensal_marica)
 let chartEnergia = null;
+let dadosAgua = [];       // 2026-11-02 -- água bombeada por mês (view agua_mensal_marica)
+let chartAgua = null;
 let dadosTel     = [];
 let dadosSes     = [];
 let dadosGraf    = [];    // 2026-10-26 -- gráfico agregado (view telemetria_marica_grafico, 15 min)
@@ -1483,6 +1495,88 @@ function renderEnergia() {
     });
 }
 
+// -------------------------------------------------------------
+// 2026-11-02 (marica-404) -- ÁGUA BOMBEADA POR MÊS (view agua_mensal_marica)
+// -------------------------------------------------------------
+// Cada acionamento (carga no PZEM, inclusive no seletor Manual) vira litros pela subida
+// de nível medida. Mês com energia sem subida medida (sensor sem leitura) fica "parcial":
+// o volume real foi maior que o mostrado.
+const AGUA_KWH_PARCIAL = 0.05;
+
+async function carregarAgua() {
+    try {
+        const { data } = await fetchSupabase('agua_mensal_marica', 'order=mes.asc&limit=36');
+        dadosAgua = data || [];
+        renderAgua();
+    } catch (e) {
+        // mantém o anterior
+    }
+}
+
+function fmtLitros(v) { return Math.round(Number(v)).toLocaleString('pt-BR'); }
+
+function renderAgua() {
+    const a = dadosAgua;
+    const resumo = document.getElementById('agua-resumo');
+    const nota = document.getElementById('agua-nota');
+    if (!a.length) { resumo.textContent = 'Sem dados de água.'; nota.textContent = ''; return; }
+
+    const nomeMes = m => { const [y, mm] = m.mes.split('-'); return `${MESES_PT[parseInt(mm, 10) - 1]}/${y.slice(2)}`; };
+    const parcial = m => Number(m.kwh_sem_subida) > AGUA_KWH_PARCIAL;
+    const ultimo = a[a.length - 1], anterior = a.length > 1 ? a[a.length - 2] : null;
+
+    // eficiência média só com acionamentos que tiveram subida medida
+    const lit = a.reduce((s, m) => s + Number(m.litros || 0), 0);
+    const kwh = a.reduce((s, m) => s + Number(m.kwh_com_subida || 0), 0);
+    const efic = kwh > 0 ? Math.round(lit / kwh / 100) * 100 : null;
+
+    resumo.textContent = `Este mês (até agora): ${fmtLitros(ultimo.litros)} L`
+        + (anterior ? ` · ${nomeMes(anterior)}: ${fmtLitros(anterior.litros)} L` : '')
+        + (efic ? ` · ~${efic.toLocaleString('pt-BR')} L por kWh` : '');
+
+    const parciais = a.filter(parcial);
+    nota.textContent = parciais.length
+        ? 'Barras claras = parcial (volume real maior; parte da energia sem subida medida): '
+          + parciais.map(m => `${nomeMes(m)} ${fmtKwh(m.kwh_sem_subida)}`).join(' · ')
+        : '';
+
+    const labels = a.map((m, i) => nomeMes(m) + (m.mes_parcial_inicio ? '*' : i === a.length - 1 ? '…' : ''));
+    const valores = a.map(m => Number(m.litros));
+    const cores = a.map(m => parcial(m) ? 'rgba(0,112,243,0.35)' : 'rgba(0,112,243,0.85)');
+
+    const litrosNoTopo = {
+        id: 'litrosNoTopo',
+        afterDatasetsDraw(chart) {
+            const { ctx } = chart;
+            chart.getDatasetMeta(0).data.forEach((barra, i) => {
+                ctx.save();
+                ctx.fillStyle = '#e2e8f0'; ctx.font = '10px IBM Plex Mono'; ctx.textAlign = 'center';
+                ctx.fillText(fmtLitros(valores[i]), barra.x, barra.y - 4);
+                ctx.restore();
+            });
+        }
+    };
+
+    if (chartAgua) chartAgua.destroy();
+    chartAgua = new Chart(document.getElementById('chart-agua').getContext('2d'), {
+        type: 'bar',
+        plugins: [litrosNoTopo],
+        data: { labels, datasets: [{ data: valores, backgroundColor: cores, borderRadius: 3, maxBarThickness: 48 }] },
+        options: {
+            responsive: true, maintainAspectRatio: false, animation: false,
+            layout: { padding: { top: 16 } },
+            events: [],   // sem caixa de valores nem destaque ao clicar (como no gráfico de nível)
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+            scales: {
+                x: { ticks: { color: '#718096', font: { family: 'IBM Plex Mono', size: 10 } }, grid: { display: false } },
+                y: { beginAtZero: true, ticks: { color: '#4a5568', font: { family: 'IBM Plex Mono', size: 9 }, maxTicksLimit: 4,
+                                                 callback: v => Number(v).toLocaleString('pt-BR') },
+                     grid: { color: '#1e2230', lineWidth: 0.5 } }
+            }
+        }
+    });
+}
+
 // 2026-11-01 (marica-395) -- view confianca_marica_publica: % do tempo, desde a última
 // gravação de firmware, com o nível mostrado (real ou estimado) a até 2 cm do real.
 async function carregarConfianca() {
@@ -1508,7 +1602,7 @@ async function carregarConfianca() {
     }
 }
 
-function atualizarDados() { carregarConfianca(); carregarRecentes(); carregarGrafico(); carregarTelemetria(); carregarSessoes(); carregarVazaoReal(); carregarEnergia(); }
+function atualizarDados() { carregarConfianca(); carregarRecentes(); carregarGrafico(); carregarTelemetria(); carregarSessoes(); carregarVazaoReal(); carregarEnergia(); carregarAgua(); }
 
 atualizarRelogio();
 setInterval(atualizarRelogio, 1000);

@@ -309,6 +309,14 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
         </div>
     </div>
 
+    <!-- Filtros de período (2026-11-02: acima do gráfico de nível; valem para o gráfico e a tabela) -->
+    <div class="filters">
+        <span class="filter-label">Período</span>
+        <button class="chip" onclick="setPeriodo('hoje',this)">Hoje</button>
+        <button class="chip active" onclick="setPeriodo('7d',this)">7 dias</button>
+        <button class="chip" onclick="setPeriodo('30d',this)">30 dias</button>
+    </div>
+
     <!-- Gráfico de nível (2026-11-02: movido para antes da confiança, a pedido de Peter) -->
     <div class="chart-box">
         <div class="chart-header">
@@ -363,14 +371,6 @@ td { font-family: var(--mono); font-size: 11px; color: var(--txt); padding: 8px 
             <div class="energia-wrap" style="height:225px;"><canvas id="chart-agua"></canvas></div>
             <div class="energia-resumo" id="agua-nota" style="margin:8px 0 0; font-size:10px; color:var(--txt3); line-height:1.5;"></div>
         </div>
-    </div>
-
-    <!-- Filtros -->
-    <div class="filters">
-        <span class="filter-label">Período</span>
-        <button class="chip" onclick="setPeriodo('hoje',this)">Hoje</button>
-        <button class="chip active" onclick="setPeriodo('7d',this)">7 dias</button>
-        <button class="chip" onclick="setPeriodo('30d',this)">30 dias</button>
     </div>
 
     <!-- Abas -->
